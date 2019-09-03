@@ -1,0 +1,458 @@
+---
+title: "Cluster analysis"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+
+knitr::opts_chunk$set(echo = F)
+knitr::opts_knit$set(root.dir = "/home/gnapier/Documents/SNP_analysis/")
+
+```
+
+<!-- Packages -->
+```{r, echo=FALSE, message=F, warning=F, results="asis"}
+# Read in packages:
+Packages <- "https://raw.githubusercontent.com/GaryNapier/Packages_functions/master/Packages.R"
+source(Packages)
+```
+
+<!-- Functions -->
+```{r, echo=FALSE, message=F, warning=F, results="asis"}
+# ----------
+# Functions
+# ----------
+
+heaD <- function(x,...){
+  head(x, ...)
+}
+
+h_col <- function(x, nrow = 6){
+  head(x[, 1:10], nrow) 
+}
+
+# # Set and reset plots
+reset_plot <- function(){
+  par(mfrow = c(1, 1))
+}
+
+Plot_dims <- function(Rows, Cols){
+  par(mfrow=c(Rows, Cols))
+}
+
+N_clusters <- function(Tree_in, Height, Min_clust_sz){
+  length(unique(cutreeDynamic(as.hclust(Tree_in), 
+                              cutHeight = Height,
+                              minClusterSize=Min_clust_sz
+  )))
+}
+
+# Function to take out outliers from each group (lineage in this case) -
+# adapt for your group of interest
+No_outliers <- function(Data, SDs){
+  # SDs <- 3.5 # How many standard devs from mean to take out
+  Out <- function(Data, SDs){
+    Vals <-c(mean(Data)+(sd(Data)*SDs),mean(Data)-(sd(Data)*SDs))
+    # abs(Data - abs(mean(Data) - Val)) > Val
+    Data > max(Vals) | Data < min(Vals)
+  }
+  
+  # Need to order or indexing won't work
+  Data <- Data[order(Data$main_lineage, Data$sub_lineage), ] 
+  Outliers <- unique(c(
+    as.vector(which(unlist(sapply(split(Data$V1, as.character(Data$sub_lineage)),
+                                  function(x){Out(x, SDs)})))), 
+    as.vector(which(unlist(sapply(split(Data$V2, as.character(Data$sub_lineage)),
+                                  function(x){Out(x, SDs)}))))
+  )) # unique(c(
+  
+  Data <- Data[-(Outliers), ]
+}
+
+# Function to subset rows of data by group (sub_lineage in this case),
+# first proportional to amount of data in the group vs other groups, then
+# retaining x% of rows (Retain arg - set to 0-1). Group arg - srtring of group col names
+Sub_group <- function(x, Group, Retain){
+  N_each_group <- plyr::count(x, eval(substitute(Group))) # Nb need library(dplyr)
+  N_each_group$retain <- round(N_each_group$freq - 
+                                 (N_each_group$freq*
+                                    (N_each_group$freq/sum(N_each_group$freq)) ))
+  
+  N_each_group$retain <- round(N_each_group$retain*Retain)
+  
+  x_split <- split(x, as.character(x[,Group]))
+  do.call("rbind", lapply(seq(x_split), function(i){
+    x_split[[i]][sample(1:nrow(x_split[[i]]), 
+                        N_each_group[N_each_group[, Group] == N_each_group[i,Group],
+                                     "retain"]) , ]
+  }))
+}
+
+Read_files <- function(File_names, Header = F, Sep = " ", Dec = "."){
+  data.frame(do.call("rbind", lapply(File_names, 
+                                     fread, header = Header, 
+                                     sep = Sep, dec = Dec
+                                     )))
+}
+
+# Function to get hierachy of lineage names. 
+# e.g. get all lineages belonging to "1" will pull "1.1", "1.1.2", "1.2" etc. 
+# i.e. pull all lineage names that contain the first element of 'subj'. 
+# Returns INDICES of heirarchy in a list of lineages, so use like this:
+# Lineage_vector[Tree("1.1", Lineage_vector)]
+Tree <- function(Subj, Lins){
+  N_subj <- nchar(Subj)
+  Subj_split <- strsplit(Lins, split = "")
+  Lins_test <- unlist(lapply(Subj_split, function(x){ paste(x[1:N_subj], collapse = "") }) )
+  if (N_subj == 1){
+    return(which(Lins == Subj))
+    }else{
+      return(grep(Subj, Lins_test))
+    }
+  }
+
+```
+
+<!-- Setup -->
+```{r, echo=FALSE, message=F, warning=F, results="asis"}
+
+# ------
+# Setup
+# ------
+
+# setwd("/home/gnapier/Documents/SNP_analysis/")
+
+Lin_nums <- 1:4
+
+# Plot params
+Line_width <- 0.2
+Collapse <- 0.0007
+Tick_sz <- 0.7
+Round <- 5
+Alpha <- 0.4
+Ncol <- 2
+Width <- 100
+Height <- Width*0.4
+Scale <- 3
+Units <- "mm"
+Labs <- labs(x = "PC1", y = "PC2")
+par(mar = c(0.5, 1.5, 0.5, 1.5))
+# Get lineage names of interest
+Lin_names <- c("1", "2", "3", "4")
+Lin_names_first_dec <- c("1.1", "1.2", "2.1", "2.2", "3.0", "3.1", "4.0", "4.1", "4.2",                          "4.3", "4.4", "4.5", "4.6", "4.7", "4.8", "4.9")
+# Lin_names <- subset(Lin_names, subset = !(Lin_names %in% c("5", "6", "7", "BOV")))
+
+```
+
+<!-- Read in files & do merges/clean-->
+```{r, echo=FALSE, message=F, warning=F, results="asis"}
+# Read in sample names and (sub)lineage to merge with PCA data
+# Lins <- "lin_1/txt/lin_1_samps_lins.txt"
+# Lins <- data.frame(fread(Lins, header = T, sep = "\t", dec = "."))
+Lins <- Read_files("all_lins/txt/lineages_clean.txt", Header = T, Sep = "\t")
+
+# Read in PCA data
+# Plink_file <- "lin_1/pca/lin_1_results.mds"
+PCA_files <- sprintf("lin_%s/pca/lin_%s_results.mds", Lin_names, Lin_names)
+
+
+# ----------------- ADAPT---------------------------------#
+# Read in PCA results data
+#PCAs <- Read_files(PCA_files, Header = T)
+# rownames(PCAs) <- PCAs[, 1]
+
+Files <- sprintf("lin_%d/txt/lin_%d_samps.txt", 2:4, 2:4)
+Lin_samps <- Read_files(Files)
+
+# head(Lin_samps)
+# str(Lin_samps)
+
+Len <- nrow(Lin_samps)
+Dummy_pca <- cbind(Lin_samps, Lin_samps, SOL = rep(0, Len), 
+                   C1 = rnorm(n=Len), C2 = rnorm(n=Len), C3 = rnorm(n=Len))
+
+names(Dummy_pca)[1:2] <- c("FID", "IID")
+
+Lin_1_pca <- Read_files("lin_1/pca/lin_1_results.mds", Header = T)
+
+Dummy_pca <- rbind(Lin_1_pca[, 1:6], Dummy_pca)
+
+rownames(Dummy_pca) <- Dummy_pca[,1]
+
+# Merge in sub lin labels
+Dummy_pca <- merge(Lins, Dummy_pca[c(1, 4, 5)], 
+                   by.x = "sample", by.y = "row.names", sort = F)
+# Add highest level lineage label
+Dummy_pca$lineage <- substr(Dummy_pca$sub_lineage, 1, 1)
+# Add group label (lin one dec place) to pca dataframe
+# Need to make SUB-lin 3 and SUB-lin 4 into "3.0" and "4.0"
+Dummy_pca$sub_lineage_2 <- ifelse(nchar(substr(Dummy_pca$sub_lineage, 1, 3)) == 1, 
+                                         paste0(substr(Dummy_pca$sub_lineage, 1, 3), ".0"), 
+                                                substr(Dummy_pca$sub_lineage, 1, 3))
+
+# Remove sub-lineage "2" sample - only one sample so will error on cluster analysis
+Dummy_pca <- Dummy_pca[!(Dummy_pca["sub_lineage_2"] == "2.0"), ]
+row.names(Dummy_pca) <- Dummy_pca[, 1]
+# ----------------- ADAPT ---------------------------------#
+
+```
+
+<!-- Which analysis? -->
+```{r, echo=FALSE, message=F, warning=F, results="asis"}
+
+# Analysis <- 1
+
+```
+
+<!-- 1. Count clusters per radius/level -->
+```{r, echo=FALSE, message=F, warning=F, results="asis", cache = F}
+
+# ----------------------------------------------
+# 1. Count clusters per radius/level
+# ----------------------------------------------
+
+# Read in data
+Files <- vector()
+for(i in Lin_nums){Files[i] <- sprintf("lin_%d/ExaML/ExaML_lin%d_rooted.txt", i, i)}
+
+Trees <- lapply(Files, function(x){
+  read.dendrogram(text = readChar(x, file.info(x)$size))
+})
+
+# Heights <- round(get_nodes_attr(Tree, "height"), 10)
+Heights <- lapply(Trees, function(x){ 
+  round(get_nodes_attr(x, "height"), 10)
+})
+
+Yticks <- lapply(Heights, function(x){
+  rev(seq(min(x), max(x), 0.0001))
+})
+
+# Set sequence for heights - how many clusters at each of these heights?
+# Seq <- rev(seq(min(Heights), max(Heights), 0.00001))
+Seqs <- lapply(Heights, function(x){
+  rev(seq(min(x), max(x), 0.00001))
+})
+
+load("all_lins/R_data/N_clusts.rda")
+
+```
+
+###### Number of clusters (y) by height of trees (x), lins 1-4 
+```{r, echo=FALSE, message=F, warning=F, results="asis", cache = F}
+Plot_dims(2, 2)
+x <- 2; y <- 2
+par(mar = c(x, y, x, y))
+for (i in seq(N_clusts)){
+  plot(N_clusts[[i]], type = 'l')
+}
+```
+
+<!-- Get heights / get number of clusters per given height -->
+```{r, echo=FALSE, message=F, warning=F, results="asis", cache = F}
+
+# Specify number of clusters (purported cluster numbers are 7, 7, 6, 37)
+N_sub_lins <- c(7, 7, 6, 37)
+
+# Get heights from number of clusters
+Heights <- lapply(seq(Seqs), function(i){
+  round(mean(Seqs[[i]]
+             [which(round(N_clusts[[i]], Round) == round(N_sub_lins[i], Round))]), Round)
+})
+
+# Heights <- list(0.00151, 0.00148, 0.00086, 0.00257)
+
+# Get k number of clusters from given heights 
+Ks <- lapply(seq(N_clusts), function(i){
+  mean(N_clusts[[i]][which(round(Seqs[[i]], Round) == round(Heights[[i]], Round))] )
+})
+
+```
+
+###### Lins 1-4 rooted trees, cut at heights giving purported sublineage clusters:
+Heights = `r round(unlist(Heights), 10)`
+
+```{r, echo=FALSE, message=F, warning=F, results="asis", cache = F}
+# Plot
+Plot_dims(2, 2)
+x <- 0.5; y <- 1.5
+par(mar = c(x, y, x, y))
+for (i in seq(Trees)){
+  Trees[[i]] %>% # collapse_branch(tol = Collapse) %>% #ladderize %>% 
+    set("branches_k_color", k = Ks[[i]]) %>%
+    plot(yaxt = "n",
+         horiz = F,
+         # nodePar = nodePar,
+         leaflab = "none", 
+         type = "rectangle",
+         edgePar = list(lwd = Line_width),
+         # ,cex.axis = Tick_sz
+         ylab = "Distance (x 0.0001)")
+  axis(side=2, at=Yticks[[i]], labels = FALSE)
+  text(par("usr")[1], Yticks[[i]],  
+       labels = Yticks[[i]]*10000, pos = 2, xpd = TRUE, cex = Tick_sz)
+  # rect.dendrogram(Tree, k = K)
+  abline(h = Heights[[i]], col = "red", lty=2, lwd = 0.5)
+}
+
+
+```
+
+
+<!-- 4. Elbow Method/Average Silhouette Method/Gap Statistic Method -->
+<!-- Clusters main lins -->
+```{r, echo=FALSE, warning=F, cache = F}
+# ------------------------------------------------------------------
+# 4. Elbow Method/Average Silhouette Method/Gap Statistic Method
+# https://uc-r.github.io/hc_clustering#dendro
+# Also cluster plot:
+# ------------------------------------------------------------------
+
+# -----------------------------------------------------
+
+# USE DUMMY PCA IN DEV.R
+
+# -----------------------------------------------------
+
+# Do PCA & cluster plots
+
+# Plot each main lin:
+message("PCA plots of main lineages 1-4")
+theme_set(theme_classic())
+ggplot(data = Dummy_pca, 
+       aes(x = C1, y = C2
+           # , colour = sub_lineage_2
+           ))+
+  geom_point(size = 1, alpha = 0.5)+
+  xlab("PC1")+ylab("PC2")+
+  scale_colour_manual(values = rainbow(length(unique(Dummy_pca$sub_lineage_2))))+
+  guides(colour = guide_legend(override.aes = list(size=7, alpha = 1)))+
+  # theme(axis.text.y=element_text(size = Tick_sz, angle=45), 
+  #       axis.text.x=element_text(size = Tick_sz))+
+    theme(axis.text.x = element_blank(), 
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(), 
+        # legend.position = "none", 
+        strip.text.x = element_text(),
+        strip.text.y = element_text(),
+        strip.background = element_rect(colour="white"))+
+  facet_wrap(~ lineage, scales = "free")
+
+# Get optimal clusts per main lin
+Opt_clusts_lin <- vector()
+Viz_clusts_main <- list()
+for (i in 1:length(unique(Dummy_pca$lineage))){
+  gap_stat <- clusGap(split(Dummy_pca, Dummy_pca[,"lineage"])[[i]][c("C1", "C2")], 
+                      FUN = hcut, nstart = 50 , K.max = 2, B =10)
+  Opt_clusts_lin[i] <- maxSE(f = gap_stat$Tab[, "gap"], 
+                             SE.f = gap_stat$Tab[, "SE.sim"]) # Not sure why so obscure
+  
+  # Plot clusts main lineage
+  Data <- Dummy_pca[Dummy_pca[,"lineage"] == unique(Dummy_pca[,"lineage"])[i],
+                    c("C1", "C2")]
+  Km <- kmeans(Data, Opt_clusts_lin[i], nstart = 25)
+  Viz_clusts_main[[i]] <- fviz_cluster(Km, Data,
+                                  labelsize = 0, 
+                                  pointsize = 1, main = NULL,
+                                  ggtheme = theme_classic())+
+    ylab("")+xlab("")+
+    theme(axis.text.x = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks = element_blank(), 
+          legend.position = "none", 
+          plot.title = element_text(size=8, hjust = 0.5))+
+    ggtitle(unique(Dummy_pca[,"lineage"])[i])
+}
+message("Optimal number of clusters by clusGap, main lineage")
+Opt_clusts_lin
+message("Clustering of main lineages")
+Viz_clusts_main_all <- grid.arrange(grobs = Viz_clusts_main,
+                               left = textGrob("PC2", rot = 90, 
+                                               gp=gpar(fontsize=11), 
+                                               x = unit(1, "npc")), 
+                               bottom = textGrob("PC1", gp=gpar(fontsize=11)))
+```
+<!-- Clusters sublins -->
+```{r, echo=FALSE, warning=F, cache = F}
+
+message("PCA plots of each sub-lineage (first decimal place)")
+# Plot each sublin (first decimal place):
+theme_set(theme_classic())
+ggplot(data = Dummy_pca, 
+       aes(x = C1, y = C2, colour = sub_lineage_2))+
+  geom_point(size = 1, alpha = 0.5)+
+  xlab("PC1")+ylab("PC2")+
+  guides(colour = guide_legend(override.aes = list(size=7, alpha = 1)))+
+  scale_colour_manual(values = rainbow(length(unique(Dummy_pca$sub_lineage_2))))+
+  # theme(axis.text.y=element_text(size = Tick_sz, angle=45), 
+  #       axis.text.x=element_text(size = Tick_sz))+
+    theme(axis.text.x = element_blank(), 
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(), 
+        legend.position = "none",
+        strip.text.x = element_text(),
+        strip.text.y = element_text(),
+        strip.background = element_rect(colour="white"))+
+  facet_wrap(~ sub_lineage_2, scales = "free")
+
+
+# Get optimal clusts per main lin
+Opt_clusts_sublin <- vector()
+Viz_clusts_sublin <- list()
+for (i in 1:length(unique(Dummy_pca$sub_lineage_2))){
+  gap_stat <- clusGap(split(Dummy_pca, Dummy_pca[,"sub_lineage_2"])[[i]][c("C1", "C2")], 
+                      FUN = hcut, nstart = 50 , K.max = 2, B =10)
+  Opt_clusts_sublin[i] <- maxSE(f = gap_stat$Tab[, "gap"], 
+                             SE.f = gap_stat$Tab[, "SE.sim"]) # Not sure why so obscure
+  
+  # Plot clusts main lineage
+  Data <- Dummy_pca[Dummy_pca[,"sub_lineage_2"] == unique(Dummy_pca[,"sub_lineage_2"])[i],
+                    c("C1", "C2")]
+  Km <- kmeans(Data, Opt_clusts_sublin[i], nstart = 25)
+  Viz_clusts_sublin[[i]] <- fviz_cluster(Km, Data,
+                                  labelsize = 0, 
+                                  pointsize = 1, main = NULL,
+                                  ggtheme = theme_classic())+
+    ylab("")+xlab("")+
+    theme(axis.text.x = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks = element_blank(), 
+          legend.position = "none", 
+          plot.title = element_text(size=8, hjust = 0.5))+
+    ggtitle(unique(Dummy_pca[,"sub_lineage_2"])[i])
+}
+message("Optimal number of clusters by clusGap, sub-lineages (first decimal place)")
+Opt_clusts_sublin
+message("Clustering of sub-lineages (first decimal place)")
+Viz_clusts_sublin_all <- grid.arrange(grobs = Viz_clusts_sublin,
+                               left = textGrob("PC2", rot = 90, 
+                                               gp=gpar(fontsize=11), 
+                                               x = unit(1, "npc")), 
+                               bottom = textGrob("PC1", gp=gpar(fontsize=11)))
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
