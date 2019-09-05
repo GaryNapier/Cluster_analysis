@@ -206,7 +206,11 @@ row.names(Dummy_pca) <- Dummy_pca[, 1]
 
 ```
 
-<!-- 1. Count clusters per radius/level -->
+<!-- ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
+
+#### 1
+#### Count clusters per radius/level
+
 ```{r, echo=FALSE, message=F, warning=F, results="asis", cache = F}
 
 # ----------------------------------------------
@@ -300,8 +304,73 @@ for (i in seq(Trees)){
 
 ```
 
+<!-- ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
 
-<!-- 4. Elbow Method/Average Silhouette Method/Gap Statistic Method -->
+---
+#### 3
+#### Fast Hierarchical Bayesian Analysis of Population Structure ("Fastbaps")
+
+Paper: https://www.biorxiv.org/content/biorxiv/early/2018/10/26/454355.full.pdf
+Github: https://github.com/gtonkinhill/fastbaps
+
+```{r, echo=FALSE, warning=F, cache = F}
+
+# https://github.com/gtonkinhill/fastbaps
+
+# Read in fasta files & do fastbaps
+Fasta_files <- sprintf("lin_%s/fasta/lin_%s_results.filt.snps.fa", 
+                       Lin_names_first_dec, Lin_names_first_dec)
+sparse.data <- lapply(Fasta_files, import_fasta_sparse_nt)
+sparse.data <- lapply(sparse.data, optimise_prior, type = "optimise.symmetric")
+baps.hc <- lapply(sparse.data, fast_baps)
+clusters <- lapply(seq(sparse.data), function(i){
+  best_baps_partition(sparse.data[[i]], as.phylo(baps.hc[[i]]))
+})
+rm(sparse.data) # Too big
+# Put results into data frames
+clusters <- lapply(clusters, function(x){
+  data.frame(id = row.names(data.frame(x)), clusters = x)
+})
+
+# Display results in markdown
+data.frame(Lin = Lins_first_dec,
+           N_clusters = do.call("rbind", lapply(clusters, 
+                                         function(x){ max(unique(Numeric(x))) })) )
+
+# Put all samples and cluster prediction together
+clusters <- do.call("rbind", clusters)
+
+# Write to csv to pass to csv2itol.py
+write.csv(clusters, file = "all_lins/itol/fastbap_clusts.csv", row.names = F, quote = F)
+
+# Create csv of colour keys (second csv file to pass to csv2itol.py). 
+# Format:
+#Type,Value,Colour
+#sub_lineage,1.1,#87D8C8
+#sub_lineage,1.1.1,#90E76C
+#sub_lineage,1.1.1.1,#A194D4 ...etc
+
+n <- length(unique(clusters$clusters))
+write.csv(data.frame(Type = rep("clusters", n), 
+                     Value = sort(unique(clusters$clusters)), 
+                     Colour = rainbow(n) ), 
+          file = "all_lins/itol/fastbaps_key.csv", row.names = F, quote = F)
+
+# Run python script to convert above two csvs to itol file - should 
+# then be in all_lins/itol/ folder
+system("python python_scripts/csv2itol.py all_lins/itol/fastbap_clusts.csv all_lins/itol/fastbaps_key.csv all_lins/itol/")
+
+```
+
+See `all_lins/itol/cluster.meta.itol.txt` file
+
+<!-- ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
+
+---
+#### 4
+#### Gap Statistic Method
+Using clusGap() to predict optimal clusters
+
 <!-- Clusters main lins -->
 ```{r, echo=FALSE, warning=F, cache = F}
 # ------------------------------------------------------------------
@@ -431,9 +500,6 @@ Viz_clusts_sublin_all <- grid.arrange(grobs = Viz_clusts_sublin,
                                                gp=gpar(fontsize=11), 
                                                x = unit(1, "npc")), 
                                bottom = textGrob("PC1", gp=gpar(fontsize=11)))
-
-
-
 
 
 ```
