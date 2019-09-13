@@ -5,7 +5,7 @@ import random
 import os
 rand_generator = random.SystemRandom()
 
-#version = "0.1.1"
+# version = 1.0
 
 def get_random_file(prefix = None,extension=None):
 	randint = rand_generator.randint(1,999999)
@@ -58,6 +58,14 @@ def nofile(filename):
 	else:
 		return False
 
+def nofolder(filename):
+	"""
+	Return True if file does not exist
+	"""
+	if not os.path.isdir(filename):
+		return True
+	else:
+		return False
 
 class vcf_class:
 	def __init__(self,filename,threads=4):
@@ -72,6 +80,7 @@ class vcf_class:
 		for l in open(self.temp_file):
 			self.samples.append(l.rstrip())
 		os.remove(self.temp_file)
+
 	def vcf_to_fasta(self,ref_file,threads=4,chunk_size = 50000):
 		self.ref_file = ref_file
 		self.chunk_size = chunk_size
@@ -84,14 +93,15 @@ class vcf_class:
 		run_cmd(cmd)
 		cmd = "rm `%(cmd_split_chr)s | awk '{print \"%(prefix)s.\"$1\".tmp.txt\"}'`" % vars(self)
 		run_cmd(cmd)
-		O = open(self.prefix+".snps.fa","w")
-		for i,l in enumerate(open(self.tmp_file)):
-			row = l.rstrip().split()
-			if i==0: continue
-			s = self.samples[i-1]
-			seq = "".join(row).replace("./.","N")
-			O.write(">%s\n%s\n" % ( s,seq))
-		O.close()
+		with open(self.prefix+".snps.fa","w") as O:
+			for i,l in enumerate(open(self.tmp_file)):
+				row = l.rstrip().split()
+				if i==0: continue
+				s = self.samples[i-1]
+				seq = "".join(row).replace("./.","N")
+				O.write(">%s\n%s\n" % ( s,seq))
+		run_cmd("rm %s" % self.tmp_file)
+
 	def vcf_to_matrix(self,):
 		self.matrix_file = self.prefix+".mat"
 		self.binary_matrix_file = self.prefix+".mat.bin"
@@ -99,20 +109,24 @@ class vcf_class:
 		run_cmd("bcftools query -f '%%CHROM\\t%%POS\\t%%REF[\\t%%IUPACGT]\\n' %(filename)s | tr '|' '/' | sed 's/\.\/\./N/g' >> %(matrix_file)s" % vars(self))
 		O = open(self.binary_matrix_file,"w").write("chr\tpos\tref\t%s\n" % ("\t".join(self.samples)))
 		run_cmd("bcftools query -f '%%CHROM\\t%%POS\\t%%REF[\\t%%GT]\\n' %(filename)s | tr '|' '/' | sed 's/\.\/\./N/g' | sed 's/1\/1/1/g' | sed 's/0\/0/0/g' >> %(binary_matrix_file)s" % vars(self))
-	def get_plink_dist(self,pca=False):
-		tmpfile = get_random_file(extension=".vcf")
-		run_cmd("bcftools view %s > %s" % (self.filename,tmpfile))
-		run_cmd("plink --vcf %s --distance square --double-id --allow-extra-chr --out %s" % (tmpfile,tmpfile))
-		O = open("%s.dist" % (self.prefix),"w")
+
+	def get_plink_dist(self,pca=True,mds=True):
+		self.tempfile = get_random_file(extension=".vcf")
+		run_cmd("bcftools view %(filename)s > %(tempfile)s" % vars(self))
+		run_cmd("plink --vcf %(tempfile)s --distance square --double-id --allow-extra-chr --out %(prefix)s.temp" % vars(self))
+		O = open("%(prefix)s.dist" % vars(self),"w")
 		dists = []
-		for l in open("%s.dist"%tmpfile):
+		for l in open("%(prefix)s.temp.dist" % vars(self)):
 			row = [float(d)/2 for d in l.rstrip().split()]
 			O.write("%s\n" % "\t".join([str(x) for x in row]))
 			dists.append(row)
 		O.close()
 		if pca:
-			run_cmd("plink --vcf %s --pca --out %s" % (tmpfile,tmpfile))
-		run_cmd("rm %s*" % tmpfile)
+			run_cmd("plink --vcf %(tempfile)s --pca --double-id --allow-extra-chr --out %(prefix)s.pca" % vars(self))
+		if mds:
+			run_cmd("plink --vcf %(tempfile)s --mds-plot 10 eigendecomp --cluster --double-id --allow-extra-chr --out %(prefix)s.pca" % vars(self))
+
+		run_cmd("rm %(tempfile)s* %(prefix)s.temp* %(prefix)s.pca.log %(prefix)s.pca.nosex" % vars(self))
 		return dists
 
 
@@ -126,10 +140,13 @@ def main(args):
 		# Loop through sample-file and do (1) append samples to list, (2) write sample to map file and (3) check for VCF index
 		for line in open(args.sample_file):
 			sample = line.rstrip()
+			if args.ignore_missing and nofile("%s/%s%s" % (args.vcf_dir, sample, args.vcf_extension)):
+				continue
 			exit_code = subprocess.call("gatk ValidateVariants -V %s/%s%s" % (args.vcf_dir, sample, args.vcf_extension),shell=True)
 			if exit_code!=0:
 				FAILED_SAMPLES.write(sample+"\n")
 				continue
+
 			samples.append(sample)
 			O.write("%s\t%s/%s%s\n" % (sample, args.vcf_dir, sample, args.vcf_extension))
 			if nofile("%s/%s%s.tbi" % (args.vcf_dir, sample, args.vcf_extension)):
@@ -141,13 +158,20 @@ def main(args):
 	# Create .fai file (SAMtools fasta index) has been created for the reference
 	if nofile("%s.fai" % args.ref.replace(".fasta","").replace(".fa","")):
 		run_cmd("samtools faidx %(ref)s" % params)
-	run_cmd("gatk GenomicsDBImport --genomicsdb-workspace-path %(prefix)s_genomics_db -L Chromosome --sample-name-map %(map_file)s --reader-threads %(threads)s" % params)
-	run_cmd("gatk --java-options \"-Xmx40g\" GenotypeGVCFs -R %(ref)s -V gendb://%(prefix)s_genomics_db -O %(prefix)s.raw.vcf.gz" % params)
-	run_cmd("bcftools view -V indels %(prefix)s.raw.vcf.gz | bcftools filter -e 'GT=\"het\"' -S . | awk 'length($4)==1 || $0~/^#/' | tr '|' '/' | tr '*' '.' | bcftools view -a | bcftools view -c 1 -Oz -o %(prefix)s.filt.vcf.gz" % params)
+	if nofolder("%(prefix)s_genomics_db" % params):
+		run_cmd("gatk GenomicsDBImport --genomicsdb-workspace-path %(prefix)s_genomics_db -L Chromosome --sample-name-map %(map_file)s --reader-threads %(threads)s --batch-size 500" % params, verbose=2)
+	if nofile("%(prefix)s.raw.vcf.gz" % params):
+		run_cmd("gatk --java-options \"-Xmx40g\" GenotypeGVCFs -R %(ref)s -V gendb://%(prefix)s_genomics_db -O %(prefix)s.raw.vcf.gz" % params, verbose=2)
+	if nofile("%(prefix)s.filt.vcf.gz" % params):
+		run_cmd("bcftools view -V indels %(prefix)s.raw.vcf.gz | bcftools filter -e 'GT=\"het\"' -S . | awk 'length($4)==1 || $0~/^#/' | tr '|' '/' | tr '*' '.' | bcftools view -a | bcftools view -c 1 -Oz -o %(prefix)s.filt.vcf.gz" % params)
 	vcf = vcf_class("%s.filt.vcf.gz" % (args.prefix))
-	vcf.vcf_to_fasta(args.ref)
-	vcf.vcf_to_matrix()
-	vcf.get_plink_dist(pca=True)
+	if nofile("%(prefix)s.snps.fa" % vars(vcf)):
+		vcf.vcf_to_fasta(args.ref)
+	if nofile("%(prefix)s.mat" % vars(vcf)):
+		vcf.vcf_to_matrix()
+	if nofile("%(prefix)s.pca.eigenvec" % vars(vcf)):
+		vcf.get_plink_dist()
+
 parser = argparse.ArgumentParser(description='TBProfiler pipeline',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--sample-file',help='sample file',required=True)
 parser.add_argument('--prefix',help='Prefix for files',required=True)
@@ -155,6 +179,7 @@ parser.add_argument('--ref',help='reference file',required=True)
 parser.add_argument('--vcf-dir',default="./vcf/", type=str, help='VCF firectory')
 parser.add_argument('--vcf-extension',default=".gatk.vcf.gz", type=str, help='VCF extension')
 parser.add_argument('--threads',default=4, type=int, help='Number of threads for parallel operations')
+parser.add_argument('--ignore-missing', action="store_true", help='If this option is set, missing samples are ignored')
 parser.set_defaults(func=main)
 
 args = parser.parse_args()
