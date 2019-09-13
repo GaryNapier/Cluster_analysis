@@ -142,7 +142,7 @@ def main(args):
 			sample = line.rstrip()
 			if args.ignore_missing and nofile("%s/%s%s" % (args.vcf_dir, sample, args.vcf_extension)):
 				continue
-			exit_code = subprocess.call("gatk ValidateVariants -R %s --validate-GVCF -V %s/%s%s" % (args.ref,args.vcf_dir, sample, args.vcf_extension),shell=True)
+			exit_code = subprocess.call("gatk ValidateVariants -R %s --validate-GVCF -V %s/%s%s" % (args.ref,args.vcf_dir, sample, args.vcf_extension), shell=True, stderr = open("/dev/null","w"))
 			if exit_code!=0:
 				FAILED_SAMPLES.write(sample+"\n")
 				continue
