@@ -5,6 +5,8 @@ import random
 import os
 rand_generator = random.SystemRandom()
 
+#version = "0.1.1"
+
 def get_random_file(prefix = None,extension=None):
 	randint = rand_generator.randint(1,999999)
 	if prefix:
@@ -124,7 +126,7 @@ def main(args):
 		# Loop through sample-file and do (1) append samples to list, (2) write sample to map file and (3) check for VCF index
 		for line in open(args.sample_file):
 			sample = line.rstrip()
-			exit_code = subprocess.call("gatk ValidateVariants -V %s/%s%s" % (args.vcf_dir, sample, args.vcf_extension),shell=True))
+			exit_code = subprocess.call("gatk ValidateVariants -V %s/%s%s" % (args.vcf_dir, sample, args.vcf_extension),shell=True)
 			if exit_code!=0:
 				FAILED_SAMPLES.write(sample+"\n")
 				continue
