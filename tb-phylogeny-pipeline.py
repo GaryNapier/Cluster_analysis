@@ -115,6 +115,7 @@ class vcf_class:
 
 
 def main(args):
+	FAILED_SAMPLES = open("%s.failed_samples.log" % args.prefix, "w")
 	params = {"threads": args.threads, "prefix": args.prefix, "ref": args.ref}
 	params["map_file"] = "%s.map" % (args.prefix)
 	with open(params["map_file"],"w") as O:
@@ -123,6 +124,10 @@ def main(args):
 		# Loop through sample-file and do (1) append samples to list, (2) write sample to map file and (3) check for VCF index
 		for line in open(args.sample_file):
 			sample = line.rstrip()
+			exit_code = subprocess.call("gatk ValidateVariants -V %s/%s%s" % (args.vcf_dir, sample, args.vcf_extension),shell=True))
+			if exit_code!=0:
+				FAILED_SAMPLES.write(sample+"\n")
+				continue
 			samples.append(sample)
 			O.write("%s\t%s/%s%s\n" % (sample, args.vcf_dir, sample, args.vcf_extension))
 			if nofile("%s/%s%s.tbi" % (args.vcf_dir, sample, args.vcf_extension)):
