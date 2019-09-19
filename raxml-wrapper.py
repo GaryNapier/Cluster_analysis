@@ -1,6 +1,8 @@
 import sys
 import argparse
 import subprocess
+import random
+
 
 def run_cmd(cmd,verbose=1,target=None):
 	"""
@@ -41,9 +43,9 @@ def main(args):
 		fine_grain_threads = args.threads
 	with open("%s.parallel.sh" % args.msa,"w") as O:
 		for i in range(int(args.starting_trees/2)):
-			O.write("raxml-ng --model GTR+G --msa %s --search --threads %s --tree rand{1} --prefix %s.search%s --seed $RANDOM\n" % (args.msa,fine_grain_threads,args.msa,i))
+			O.write("raxml-ng --model GTR+G --msa %s --search --threads %s --tree rand{1} --prefix %s.search%s --seed %s\n" % (args.msa,fine_grain_threads,args.msa,i,random.randint(1,10000)))
 		for i in range(int(args.starting_trees/2),args.starting_trees):
-			O.write("raxml-ng --model GTR+G --msa %s --search --threads %s --tree pars{1} --prefix %s.search%s --seed $RANDOM\n" % (args.msa,fine_grain_threads,args.msa,i))
+			O.write("raxml-ng --model GTR+G --msa %s --search --threads %s --tree pars{1} --prefix %s.search%s --seed %s\n" % (args.msa,fine_grain_threads,args.msa,i,random.randint(1,10000)))
 	run_cmd("cat %s.parallel.sh | parallel -j %s" % (args.msa,course_grain_threads))
 	run_cmd("grep Final %(msa)s*search*.log > %(msa)s.final_likelihoods.log" % vars(args))
 	best_tree_lik = None
