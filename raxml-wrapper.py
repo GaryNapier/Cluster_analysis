@@ -37,21 +37,28 @@ def main(args):
 			fine_grain_threads = int(row[8])
 	sys.stderr.write("Using %s threads for fine grain parallelisation\n" % fine_grain_threads)
 	if fine_grain_threads<args.threads:
-		course_grain_threads = args.threads//fine_grain_threads
+		course_grain_threads = int(args.threads//fine_grain_threads)
 	else:
 		course_grain_threads = 1
 		fine_grain_threads = args.threads
+	bs_trees_per_process = int(args.bs_trees//course_grain_threads)
+	sys.stderr.write("Performing %s trees per bootstrap process\n" % bs_trees_per_process)
+# 20 / 4 - 5
+# 100/5 = 20
 	with open("%s.parallel.sh" % args.msa,"w") as O:
 		for i in range(int(args.starting_trees/2)):
-			O.write("raxml-ng --model GTR+G --msa %s --search --threads %s --tree rand{1} --prefix %s.search%s --seed %s\n" % (args.msa,fine_grain_threads,args.msa,i,random.randint(1,10000)))
+			O.write("raxml-ng --model GTR+G --msa %s.raxml.rba --search --threads %s --tree rand{1} --prefix %s.search.%s --seed %s\n" % (args.msa,fine_grain_threads,args.msa,i,random.randint(1,10000)))
 		for i in range(int(args.starting_trees/2),args.starting_trees):
-			O.write("raxml-ng --model GTR+G --msa %s --search --threads %s --tree pars{1} --prefix %s.search%s --seed %s\n" % (args.msa,fine_grain_threads,args.msa,i,random.randint(1,10000)))
+			O.write("raxml-ng --model GTR+G --msa %s.raxml.rba --search --threads %s --tree pars{1} --prefix %s.search.%s --seed %s\n" % (args.msa,fine_grain_threads,args.msa,i,random.randint(1,10000)))
+		for i in range(course_grain_threads):
+			O.write("raxml-ng --model GTR+G  --msa %s.raxml.rba --bootstrap --seed %s --bs-trees %s --prefix %s.bootstraps.%s --threads %s\n" % (args.msa,random.randint(1,10000),bs_trees_per_process, args.msa,i,fine_grain_threads))
+		if args.bs_trees%bs_trees_per_process>0:
+			O.write("raxml-ng --bootstrap --msa %s.raxml.rba --seed %s --bs-trees %s --prefix %s.bootstraps.%s --threads %s\n" % (args.msa,random.randint(1,10000),(args.bs_trees%bs_trees_per_process), args.msa,(i+1),fine_grain_threads))
 	run_cmd("cat %s.parallel.sh | parallel -j %s" % (args.msa,course_grain_threads))
-	run_cmd("grep Final %(msa)s*search*.log > %(msa)s.final_likelihoods.log" % vars(args))
 	best_tree_lik = None
 	best_tree = None
 	for i in range(args.starting_trees):
-		for l in open("%s.search%s.raxml.log" % (args.msa,i)):
+		for l in open("%s.search.%s.raxml.log" % (args.msa,i)):
 			if "Final LogLikelihood" in l:
 				row = l.strip().split()
 				lik = float(row[2])
@@ -63,13 +70,17 @@ def main(args):
 					best_tree = i
 
 	print("Best tree search: %s" % best_tree)
-	run_cmd("cp %s.search%s.raxml.bestTree %s.raxml.bestTree" % (args.msa,i,args.msa))
+	run_cmd("cp %s.search.%s.raxml.bestTree %s.raxml.bestTree" % (args.msa,i,args.msa))
+	run_cmd("cat %(msa)s.bootstraps.*.raxml.bootstraps > %(msa)s.bootstraps" % vars(args))
+	run_cmd("raxml-ng --support --tree %(msa)s.raxml.bestTree --bs-trees %(msa)s.bootstraps --prefix %(msa)s --threads 1 " % vars(args))
+
 
 parser = argparse.ArgumentParser(description='TBProfiler pipeline',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 parser.add_argument('--msa',help='Prefix for files',required=True)
 parser.add_argument('--threads',default=4, type=int, help='Number of threads for parallel operations')
 parser.add_argument('--starting-trees',default=24, type=int, help='Number of starting trees')
+parser.add_argument('--bs-trees',default=100, type=int, help='Number of starting trees')
 parser.set_defaults(func=main)
 
 args = parser.parse_args()
