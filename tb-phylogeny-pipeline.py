@@ -152,25 +152,25 @@ def main(args):
 			O.write("%s\t%s/%s%s\n" % (sample, args.vcf_dir, sample, args.vcf_extension))
 			if nofile("%s/%s%s.tbi" % (args.vcf_dir, sample, args.vcf_extension)):
 				run_cmd("bcftools index --tbi %s/%s%s" % (args.vcf_dir, sample, args.vcf_extension))
-
+	stages = {"dbimport":1,"genotype":2,"filtering":3,"fasta":4,"matrix":5,"pca":6}
 	# Create .dict file (GATK fasta index) has been created for the reference
 	if nofile("%s.dict" % args.ref.replace(".fasta","").replace(".fa","")):
 		run_cmd("gatk CreateSequenceDictionary -R %(ref)s" % params)
 	# Create .fai file (SAMtools fasta index) has been created for the reference
 	if nofile("%s.fai" % args.ref.replace(".fasta","").replace(".fa","")):
 		run_cmd("samtools faidx %(ref)s" % params)
-	if nofolder("%(prefix)s_genomics_db" % params):
+	if nofolder("%(prefix)s_genomics_db" % params) or stages[args.redo]>=1:
 		run_cmd("gatk GenomicsDBImport --genomicsdb-workspace-path %(prefix)s_genomics_db -L Chromosome --sample-name-map %(map_file)s --reader-threads %(threads)s --batch-size 500" % params, verbose=2)
-	if nofile("%(prefix)s.raw.vcf.gz" % params):
+	if nofile("%(prefix)s.raw.vcf.gz" % params) or stages[args.redo]>=2:
 		run_cmd("gatk --java-options \"-Xmx40g\" GenotypeGVCFs -R %(ref)s -V gendb://%(prefix)s_genomics_db -O %(prefix)s.raw.vcf.gz" % params, verbose=2)
-	if nofile("%(prefix)s.filt.vcf.gz" % params):
+	if nofile("%(prefix)s.filt.vcf.gz" % params) or stages[args.redo]>=3:
 		run_cmd("bcftools view -V indels %(prefix)s.raw.vcf.gz | bcftools filter -e 'GT=\"het\"' -S . | awk 'length($4)==1 || $0~/^#/' | tr '|' '/' | tr '*' '.' | bcftools view -a | bcftools view -c 1 -Oz -o %(prefix)s.filt.vcf.gz" % params)
 	vcf = vcf_class("%s.filt.vcf.gz" % (args.prefix))
-	if nofile("%(prefix)s.snps.fa" % vars(vcf)):
+	if nofile("%(prefix)s.snps.fa" % vars(vcf)) or stages[args.redo]>=4:
 		vcf.vcf_to_fasta(args.ref)
-	if nofile("%(prefix)s.mat" % vars(vcf)):
+	if nofile("%(prefix)s.mat" % vars(vcf)) or stages[args.redo]>=5:
 		vcf.vcf_to_matrix()
-	if nofile("%(prefix)s.pca.eigenvec" % vars(vcf)):
+	if nofile("%(prefix)s.pca.eigenvec" % vars(vcf)) or stages[args.redo]>=6:
 		vcf.get_plink_dist()
 
 parser = argparse.ArgumentParser(description='TBProfiler pipeline',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -181,6 +181,7 @@ parser.add_argument('--vcf-dir',default="./vcf/", type=str, help='VCF firectory'
 parser.add_argument('--vcf-extension',default=".gatk.vcf.gz", type=str, help='VCF extension')
 parser.add_argument('--threads',default=4, type=int, help='Number of threads for parallel operations')
 parser.add_argument('--ignore-missing', action="store_true", help='If this option is set, missing samples are ignored')
+parser.add_argument('--redo',type=str,choices=["dbimport","genotype","filtering","fasta","matrix","pca"])
 parser.set_defaults(func=main)
 
 args = parser.parse_args()
