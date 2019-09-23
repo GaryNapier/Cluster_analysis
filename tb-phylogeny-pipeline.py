@@ -134,13 +134,17 @@ def main(args):
 	FAILED_SAMPLES = open("%s.failed_samples.log" % args.prefix, "w")
 	params = {"threads": args.threads, "prefix": args.prefix, "ref": args.ref}
 	params["map_file"] = "%s.map" % (args.prefix)
+	run_validate = {"Y":1, "N":0}
+
 	with open(params["map_file"],"w") as O:
+
 		# Set up list to hold sample names
 		samples = []
+
 		# Loop through sample-file and do (1) append samples to list, (2) write sample to map file and (3) check for VCF index
 		for line in open(args.sample_file):
 			sample = line.rstrip()
-			if args.ignore_missing and nofile("%s/%s%s" % (args.vcf_dir, sample, args.vcf_extension)):
+			if args.ignore_missing and nofile("%s/%s%s" % (args.vcf_dir, sample, args.vcf_extension)) and run_validate[args.validate]=1:
 				continue
 			sys.stderr.write("Validating %s/%s%s\n" % (args.vcf_dir, sample, args.vcf_extension))
 			exit_code = subprocess.call("gatk ValidateVariants -R %s --validate-GVCF -V %s/%s%s" % (args.ref,args.vcf_dir, sample, args.vcf_extension), shell=True, stderr = open("/dev/null","w"))
@@ -182,6 +186,7 @@ parser.add_argument('--vcf-extension',default=".gatk.vcf.gz", type=str, help='VC
 parser.add_argument('--threads',default=4, type=int, help='Number of threads for parallel operations')
 parser.add_argument('--ignore-missing', action="store_true", help='If this option is set, missing samples are ignored')
 parser.add_argument('--redo',type=str,choices=["dbimport","genotype","filtering","fasta","matrix","pca"])
+parser.add_argument('--validate', type=str, choices=["Y", "N"])
 parser.set_defaults(func=main)
 
 args = parser.parse_args()
