@@ -146,7 +146,7 @@ def main(args):
 			if args.ignore_missing and nofile("%s/%s%s" % (args.vcf_dir, sample, args.vcf_extension)):
 				continue
 			if args.no_validate or args.redo:
-				pass:
+				pass
 			else:
 				sys.stderr.write("Validating %s/%s%s\n" % (args.vcf_dir, sample, args.vcf_extension))
 				exit_code = subprocess.call("gatk ValidateVariants -R %s --validate-GVCF -V %s/%s%s" % (args.ref,args.vcf_dir, sample, args.vcf_extension), shell=True, stderr = open("/dev/null","w"))
