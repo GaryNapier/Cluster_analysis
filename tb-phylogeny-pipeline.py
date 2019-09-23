@@ -134,7 +134,6 @@ def main(args):
 	FAILED_SAMPLES = open("%s.failed_samples.log" % args.prefix, "w")
 	params = {"threads": args.threads, "prefix": args.prefix, "ref": args.ref}
 	params["map_file"] = "%s.map" % (args.prefix)
-	run_validate = {"Y":1, "N":0}
 
 	with open(params["map_file"],"w") as O:
 
