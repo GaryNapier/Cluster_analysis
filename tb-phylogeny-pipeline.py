@@ -144,7 +144,7 @@ def main(args):
 		# Loop through sample-file and do (1) append samples to list, (2) write sample to map file and (3) check for VCF index
 		for line in open(args.sample_file):
 			sample = line.rstrip()
-			if args.ignore_missing and nofile("%s/%s%s" % (args.vcf_dir, sample, args.vcf_extension)) and run_validate[args.validate]=1:
+			if args.ignore_missing and nofile("%s/%s%s" % (args.vcf_dir, sample, args.vcf_extension)) and run_validate[args.validate]==1:
 				continue
 			sys.stderr.write("Validating %s/%s%s\n" % (args.vcf_dir, sample, args.vcf_extension))
 			exit_code = subprocess.call("gatk ValidateVariants -R %s --validate-GVCF -V %s/%s%s" % (args.ref,args.vcf_dir, sample, args.vcf_extension), shell=True, stderr = open("/dev/null","w"))
