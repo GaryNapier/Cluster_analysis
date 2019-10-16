@@ -134,30 +134,30 @@ def main(args):
 	FAILED_SAMPLES = open("%s.failed_samples.log" % args.prefix, "w")
 	params = {"threads": args.threads, "prefix": args.prefix, "ref": args.ref}
 	params["map_file"] = "%s.map" % (args.prefix)
-    if args.redo:
-        samples = [x.rstrip() for x in open(params["map_file"]).readlines()]
-    else:
-    	with open(params["map_file"],"w") as O:
+	if args.redo:
+		samples = [x.rstrip() for x in open(params["map_file"]).readlines()]
+	else:
+		with open(params["map_file"],"w") as O:
 
-    		# Set up list to hold sample names
-    		samples = []
+			# Set up list to hold sample names
+			samples = []
 
-    		# Loop through sample-file and do (1) append samples to list, (2) write sample to map file and (3) check for VCF index
-    		for line in open(args.sample_file):
-    			sample = line.rstrip()
-    			if args.ignore_missing and nofile("%s/%s%s" % (args.vcf_dir, sample, args.vcf_extension)):
-    				continue
-    			if args.no_validate or args.redo:
-    				pass
-    			else:
-    				if not os.path.isfile(f"{args.vcf_dir}/{sample}{args.vcf_extension}.validated"):
-    					FAILED_SAMPLES.write(sample+"\n")
-    					continue
+			# Loop through sample-file and do (1) append samples to list, (2) write sample to map file and (3) check for VCF index
+			for line in open(args.sample_file):
+				sample = line.rstrip()
+				if args.ignore_missing and nofile("%s/%s%s" % (args.vcf_dir, sample, args.vcf_extension)):
+					continue
+				if args.no_validate or args.redo:
+					pass
+				else:
+					if not os.path.isfile(f"{args.vcf_dir}/{sample}{args.vcf_extension}.validated"):
+						FAILED_SAMPLES.write(sample+"\n")
+						continue
 
-    			samples.append(sample)
-    			O.write("%s\t%s/%s%s\n" % (sample, args.vcf_dir, sample, args.vcf_extension))
-    			if nofile("%s/%s%s.tbi" % (args.vcf_dir, sample, args.vcf_extension)):
-    				run_cmd("bcftools index --tbi %s/%s%s" % (args.vcf_dir, sample, args.vcf_extension))
+				samples.append(sample)
+				O.write("%s\t%s/%s%s\n" % (sample, args.vcf_dir, sample, args.vcf_extension))
+				if nofile("%s/%s%s.tbi" % (args.vcf_dir, sample, args.vcf_extension)):
+					run_cmd("bcftools index --tbi %s/%s%s" % (args.vcf_dir, sample, args.vcf_extension))
 	stages = {"dbimport":1,"genotype":2,"filtering":3,"fasta":4,"matrix":5,"pca":6}
 	# Create .dict file (GATK fasta index) has been created for the reference
 	if nofile("%s.dict" % args.ref.replace(".fasta","").replace(".fa","")):
