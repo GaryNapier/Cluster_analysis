@@ -29,8 +29,7 @@ def run_cmd(cmd,verbose=1,target=None):
 	"""
 	Wrapper to run a command using subprocess with 3 levels of verbosity and automatic exiting if command failed
 	"""
-	if target and filecheck(target): 
-		return True
+	if target and filecheck(target): return True
 	cmd = "set -u pipefail; " + cmd
 	if verbose==2:
 		sys.stderr.write("\nRunning command:\n%s\n" % cmd)
@@ -135,49 +134,49 @@ def main(args):
 	FAILED_SAMPLES = open("%s.failed_samples.log" % args.prefix, "w")
 	params = {"threads": args.threads, "prefix": args.prefix, "ref": args.ref}
 	params["map_file"] = "%s.map" % (args.prefix)
+	if args.redo:
+		samples = [x.rstrip() for x in open(params["map_file"]).readlines()]
+	else:
+		with open(params["map_file"],"w") as O:
 
-	with open(params["map_file"],"w") as O:
+			# Set up list to hold sample names
+			samples = []
 
-		# Set up list to hold sample names
-		samples = []
+			# Loop through sample-file and do (1) append samples to list, (2) write sample to map file and (3) check for VCF index
+			for line in open(args.sample_file):
+				sample = line.rstrip()
+				if args.ignore_missing and nofile("%s/%s%s" % (args.vcf_dir, sample, args.vcf_extension)):
+					continue
+				if args.no_validate or args.redo:
+					pass
+				else:
+					if not os.path.isfile(f"{args.vcf_dir}/{sample}{args.vcf_extension}.validated"):
+						FAILED_SAMPLES.write(sample+"\n")
+						continue
 
-		# Loop through sample-file and do (1) append samples to list, (2) write sample to map file and (3) check for VCF index
-		for line in open(args.sample_file):
-			sample = line.rstrip()
-			if args.ignore_missing and nofile("%s/%s%s" % (args.vcf_dir, sample, args.vcf_extension)):
-				continue
-			sys.stderr.write("Validating %s/%s%s\n" % (args.vcf_dir, sample, args.vcf_extension))
-			exit_code = subprocess.call("gatk ValidateVariants -R %s --validate-GVCF -V %s/%s%s" % (args.ref,args.vcf_dir, sample, args.vcf_extension), shell=True, stderr = open("/dev/null","w"))
-			if exit_code!=0:
-				FAILED_SAMPLES.write(sample+"\n")
-				continue
-
-			samples.append(sample)
-			O.write("%s\t%s/%s%s\n" % (sample, args.vcf_dir, sample, args.vcf_extension))
-			if nofile("%s/%s%s.tbi" % (args.vcf_dir, sample, args.vcf_extension)):
-				run_cmd("bcftools index --tbi %s/%s%s" % (args.vcf_dir, sample, args.vcf_extension))
-
+				samples.append(sample)
+				O.write("%s\t%s/%s%s\n" % (sample, args.vcf_dir, sample, args.vcf_extension))
+				if nofile("%s/%s%s.tbi" % (args.vcf_dir, sample, args.vcf_extension)):
+					run_cmd("bcftools index --tbi %s/%s%s" % (args.vcf_dir, sample, args.vcf_extension))
 	stages = {"dbimport":1,"genotype":2,"filtering":3,"fasta":4,"matrix":5,"pca":6}
-
 	# Create .dict file (GATK fasta index) has been created for the reference
 	if nofile("%s.dict" % args.ref.replace(".fasta","").replace(".fa","")):
 		run_cmd("gatk CreateSequenceDictionary -R %(ref)s" % params)
 	# Create .fai file (SAMtools fasta index) has been created for the reference
 	if nofile("%s.fai" % args.ref.replace(".fasta","").replace(".fa","")):
 		run_cmd("samtools faidx %(ref)s" % params)
-
 	if nofolder("%(prefix)s_genomics_db" % params) or stages[args.redo]<=1:
 		run_cmd("gatk GenomicsDBImport --genomicsdb-workspace-path %(prefix)s_genomics_db -L Chromosome --sample-name-map %(map_file)s --reader-threads %(threads)s --batch-size 500" % params, verbose=2)
-	if nofile("%(prefix)s.raw.vcf.gz" % params) or stages[args.redo]>=2:
+	if nofile("%(prefix)s.raw.vcf.gz" % params) or stages[args.redo]<=2:
 		run_cmd("gatk --java-options \"-Xmx40g\" GenotypeGVCFs -R %(ref)s -V gendb://%(prefix)s_genomics_db -O %(prefix)s.raw.vcf.gz" % params, verbose=2)
-	if nofile("%(prefix)s.filt.vcf.gz" % params) or stages[args.redo]>=3:
+	if nofile("%(prefix)s.filt.vcf.gz" % params) or stages[args.redo]<=3:
 		run_cmd("bcftools view -V indels %(prefix)s.raw.vcf.gz | bcftools filter -e 'GT=\"het\"' -S . | awk 'length($4)==1 || $0~/^#/' | tr '|' '/' | tr '*' '.' | bcftools view -a | bcftools view -c 1 -Oz -o %(prefix)s.filt.vcf.gz" % params)
 	vcf = vcf_class("%s.filt.vcf.gz" % (args.prefix))
-	if nofile("%(prefix)s.snps.fa" % vars(vcf)) or stages[args.redo]>=4:
+	if nofile("%(prefix)s.snps.fa" % vars(vcf)) or stages[args.redo]<=4:
 		vcf.vcf_to_fasta(args.ref)
-	if nofile("%(prefix)s.mat" % vars(vcf)) or stages[args.redo]>=5:
+	if nofile("%(prefix)s.mat" % vars(vcf)) or stages[args.redo]<=5:
 		vcf.vcf_to_matrix()
-	if nofile("%(prefix)s.pca.eigenvec" % vars(vcf)) or stages[args.redo]>=6:
+	if nofile("%(prefix)s.pca.eigenvec" % vars(vcf)) or stages[args.redo]<=6:
 		vcf.get_plink_dist()
 
 parser = argparse.ArgumentParser(description='TBProfiler pipeline',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -189,6 +188,7 @@ parser.add_argument('--vcf-extension',default=".gatk.vcf.gz", type=str, help='VC
 parser.add_argument('--threads',default=4, type=int, help='Number of threads for parallel operations')
 parser.add_argument('--ignore-missing', action="store_true", help='If this option is set, missing samples are ignored')
 parser.add_argument('--redo',type=str,choices=["dbimport","genotype","filtering","fasta","matrix","pca"])
+parser.add_argument('--no-validate',action="store_true",)
 parser.set_defaults(func=main)
 
 args = parser.parse_args()
