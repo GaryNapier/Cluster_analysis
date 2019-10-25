@@ -17,6 +17,7 @@ knitr::opts_knit$set(root.dir = "/home/gnapier/Documents/SNP_analysis/")
 # Read in packages:
 Packages <- "https://raw.githubusercontent.com/GaryNapier/Packages_functions/master/Packages.R"
 source(Packages)
+
 ```
 
 <!-- Functions -->
@@ -47,6 +48,10 @@ N_clusters <- function(Tree_in, Height, Min_clust_sz){
                               cutHeight = Height,
                               minClusterSize=Min_clust_sz
   )))
+}
+
+Numeric <- function(x){
+  x[, sapply(x, is.numeric)]
 }
 
 # Function to take out outliers from each group (lineage in this case) -
@@ -111,7 +116,7 @@ Tree <- function(Subj, Lins){
     }else{
       return(grep(Subj, Lins_test))
     }
-  }
+}
 
 ```
 
@@ -122,7 +127,7 @@ Tree <- function(Subj, Lins){
 # Setup
 # ------
 
-# setwd("/home/gnapier/Documents/SNP_analysis/")
+setwd("/home/gnapier/Documents/SNP_analysis/")
 
 Lin_nums <- 1:4
 
@@ -142,6 +147,7 @@ par(mar = c(0.5, 1.5, 0.5, 1.5))
 # Get lineage names of interest
 Lin_names <- c("1", "2", "3", "4")
 Lin_names_first_dec <- c("1.1", "1.2", "2.1", "2.2", "3.0", "3.1", "4.0", "4.1", "4.2",                          "4.3", "4.4", "4.5", "4.6", "4.7", "4.8", "4.9")
+Lin_names_all <- c(Lin_names, Lin_names_first_dec)
 # Lin_names <- subset(Lin_names, subset = !(Lin_names %in% c("5", "6", "7", "BOV")))
 
 ```
@@ -155,59 +161,70 @@ Lins <- Read_files("all_lins/txt/lineages_clean.txt", Header = T, Sep = "\t")
 
 # Read in PCA data
 # Plink_file <- "lin_1/pca/lin_1_results.mds"
-PCA_files <- sprintf("lin_%s/pca/lin_%s_results.mds", Lin_names, Lin_names)
+# PCA_files <- sprintf("lin_%s/pca/lin_%s_results.mds", Lin_names, Lin_names)
+# PCA_files_lin <- sprintf("lin_%s/results/lin_%s_results.filt.pca.mds",
+                     # Lin_names, Lin_names)
+PCA_files_sublin <- sprintf("lin_%s/results/lin_%s_results.filt.pca.mds",
+                     Lin_names_first_dec, Lin_names_first_dec)
+# PCAs_lin <- Read_files(PCA_files_lin, Header = T)
+PCAs <- Read_files(PCA_files_sublin, Header = T)
+# row.names(PCAs) <- PCAs[,1]
 
+# PCA Eig files
+Eig_files <- sprintf("lin_%s/results/lin_%s_results.filt.pca.eigenval",
+                     Lin_names_first_dec, Lin_names_first_dec)
+Eigs <- Read_files(Eig_files)
+n <- length(Eig_files)
+Eigs <- cbind(c(sort(rep(Lin_names, n)), sort(rep(Lin_names_first_dec, n))), 
+              Eigs)
+colnames(Eigs) <- c("Lin", "Eigs")
 
 # ----------------- ADAPT---------------------------------#
 # Read in PCA results data
 #PCAs <- Read_files(PCA_files, Header = T)
 # rownames(PCAs) <- PCAs[, 1]
 
-Files <- sprintf("lin_%d/txt/lin_%d_samps.txt", 2:4, 2:4)
-Lin_samps <- Read_files(Files)
+# Files <- sprintf("lin_%d/txt/lin_%d_samps.txt", 2:4, 2:4)
+# Lin_samps <- Read_files(Files)
 
 # head(Lin_samps)
 # str(Lin_samps)
 
-Len <- nrow(Lin_samps)
-Dummy_pca <- cbind(Lin_samps, Lin_samps, SOL = rep(0, Len), 
-                   C1 = rnorm(n=Len), C2 = rnorm(n=Len), C3 = rnorm(n=Len))
+# Len <- nrow(Lin_samps)
+# Dummy_pca <- cbind(Lin_samps, Lin_samps, SOL = rep(0, Len), 
+#                    C1 = rnorm(n=Len), C2 = rnorm(n=Len), C3 = rnorm(n=Len))
 
-names(Dummy_pca)[1:2] <- c("FID", "IID")
+# names(Dummy_pca)[1:2] <- c("FID", "IID")
 
-Lin_1_pca <- Read_files("lin_1/pca/lin_1_results.mds", Header = T)
+# Lin_1_pca <- Read_files("lin_1/pca/lin_1_results.mds", Header = T)
 
-Dummy_pca <- rbind(Lin_1_pca[, 1:6], Dummy_pca)
+# Dummy_pca <- rbind(Lin_1_pca[, 1:6], Dummy_pca)
 
-rownames(Dummy_pca) <- Dummy_pca[,1]
+# rownames(Dummy_pca) <- Dummy_pca[,1]
+
+
 
 # Merge in sub lin labels
-Dummy_pca <- merge(Lins, Dummy_pca[c(1, 4, 5)], 
-                   by.x = "sample", by.y = "row.names", sort = F)
+PCAs <- merge(Lins, PCAs[c(1, 4, 5)], 
+                   by.x = "sample", by.y = names(PCAs)[1], sort = F)
+
 # Add highest level lineage label
-Dummy_pca$lineage <- substr(Dummy_pca$sub_lineage, 1, 1)
+PCAs$lineage <- substr(PCAs$sub_lineage, 1, 1)
 # Add group label (lin one dec place) to pca dataframe
 # Need to make SUB-lin 3 and SUB-lin 4 into "3.0" and "4.0"
-Dummy_pca$sub_lineage_2 <- ifelse(nchar(substr(Dummy_pca$sub_lineage, 1, 3)) == 1, 
-                                         paste0(substr(Dummy_pca$sub_lineage, 1, 3), ".0"), 
-                                                substr(Dummy_pca$sub_lineage, 1, 3))
+PCAs$sub_lineage_2 <- ifelse(nchar(substr(PCAs$sub_lineage, 1, 3)) == 1, 
+                                         paste0(substr(PCAs$sub_lineage, 1, 3), ".0"), 
+                                                substr(PCAs$sub_lineage, 1, 3))
 
 # Remove sub-lineage "2" sample - only one sample so will error on cluster analysis
-Dummy_pca <- Dummy_pca[!(Dummy_pca["sub_lineage_2"] == "2.0"), ]
-row.names(Dummy_pca) <- Dummy_pca[, 1]
+PCAs <- PCAs[!(PCAs["sub_lineage_2"] == "2.0"), ]
+row.names(PCAs) <- PCAs[, 1]
 # ----------------- ADAPT ---------------------------------#
 
 ```
 
-<!-- Which analysis? -->
-```{r, echo=FALSE, message=F, warning=F, results="asis"}
-
-# Analysis <- 1
-
-```
-
-<!-- ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
-
+ 
+<!--
 #### 1
 #### Count clusters per radius/level
 
@@ -253,8 +270,10 @@ for (i in seq(N_clusts)){
   plot(N_clusts[[i]], type = 'l')
 }
 ```
+-->
 
 <!-- Get heights / get number of clusters per given height -->
+<!--
 ```{r, echo=FALSE, message=F, warning=F, results="asis", cache = F}
 
 # Specify number of clusters (purported cluster numbers are 7, 7, 6, 37)
@@ -277,7 +296,9 @@ Ks <- lapply(seq(N_clusts), function(i){
 
 ###### Lins 1-4 rooted trees, cut at heights giving purported sublineage clusters:
 Heights = `r round(unlist(Heights), 10)`
+-->
 
+<!--
 ```{r, echo=FALSE, message=F, warning=F, results="asis", cache = F}
 # Plot
 Plot_dims(2, 2)
@@ -303,25 +324,36 @@ for (i in seq(Trees)){
 
 
 ```
+-->
 
 <!-- ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
 
 ---
-#### 3
+
 #### Fast Hierarchical Bayesian Analysis of Population Structure ("Fastbaps")
+
+Determining clusters directly from fasta files. 
 
 Paper: https://www.biorxiv.org/content/biorxiv/early/2018/10/26/454355.full.pdf
 Github: https://github.com/gtonkinhill/fastbaps
 
-```{r, echo=FALSE, warning=F, cache = F}
-
+```{r, echo=FALSE, warning=F, cache = F, message = F}
+  
 # https://github.com/gtonkinhill/fastbaps
 
 # Read in fasta files & do fastbaps
-Fasta_files <- sprintf("lin_%s/fasta/lin_%s_results.filt.snps.fa", 
+Fasta_files <- sprintf("lin_%s/results/lin_%s_results.filt.snps.fa", 
                        Lin_names_first_dec, Lin_names_first_dec)
 sparse.data <- lapply(Fasta_files, import_fasta_sparse_nt)
+# Run this code:
+# trace(optimise_prior, edit=TRUE) and add sparse.data$opt_hyperparam <- cc at the end
+# ... then this:
 sparse.data <- lapply(sparse.data, optimise_prior, type = "optimise.symmetric")
+# ...to get this:
+print("Optimised hyperparameters:")
+cat(paste(Lin_names_first_dec, "-", 
+            unlist(lapply(sparse.data, function(x) x$opt_hyperparam)), "\n"))
+# ... continue fastbaps
 baps.hc <- lapply(sparse.data, fast_baps)
 clusters <- lapply(seq(sparse.data), function(i){
   best_baps_partition(sparse.data[[i]], as.phylo(baps.hc[[i]]))
@@ -333,15 +365,18 @@ clusters <- lapply(clusters, function(x){
 })
 
 # Display results in markdown
-data.frame(Lin = Lins_first_dec,
+FB_df <- data.frame(Lin = Lin_names_first_dec,
            N_clusters = do.call("rbind", lapply(clusters, 
                                          function(x){ max(unique(Numeric(x))) })) )
 
+FB_df 
+
 # Put all samples and cluster prediction together
-clusters <- do.call("rbind", clusters)
+All_clusters <- do.call("rbind", clusters)
 
 # Write to csv to pass to csv2itol.py
-write.csv(clusters, file = "all_lins/itol/fastbap_clusts.csv", row.names = F, quote = F)
+write.csv(All_clusters, file = "all_lins/itol/fastbap_clusts.csv", 
+          row.names = F, quote = F)
 
 # Create csv of colour keys (second csv file to pass to csv2itol.py). 
 # Format:
@@ -350,28 +385,32 @@ write.csv(clusters, file = "all_lins/itol/fastbap_clusts.csv", row.names = F, qu
 #sub_lineage,1.1.1,#90E76C
 #sub_lineage,1.1.1.1,#A194D4 ...etc
 
-n <- length(unique(clusters$clusters))
+n <- length(unique(All_clusters$clusters))
 write.csv(data.frame(Type = rep("clusters", n), 
-                     Value = sort(unique(clusters$clusters)), 
+                     Value = sort(unique(All_clusters$clusters)), 
                      Colour = rainbow(n) ), 
           file = "all_lins/itol/fastbaps_key.csv", row.names = F, quote = F)
 
 # Run python script to convert above two csvs to itol file - should 
 # then be in all_lins/itol/ folder
-system("python python_scripts/csv2itol.py all_lins/itol/fastbap_clusts.csv all_lins/itol/fastbaps_key.csv all_lins/itol/")
+system(sprintf("/home/gnapier/anaconda3/bin/python %s/python_scripts/csv2itol.py %s/all_lins/itol/fastbap_clusts.csv %s/all_lins/itol/fastbaps_key.csv %s/all_lins/itol/",
+              getwd(), getwd(), getwd(), getwd()))
+  
+# system("which python", intern = T)
 
 ```
 
+
 See `all_lins/itol/cluster.meta.itol.txt` file
 
-<!-- ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ -->
-
 ---
-#### 4
-#### Gap Statistic Method
-Using clusGap() to predict optimal clusters
+
+<!-- #### Gap Statistic Method -->
+
+<!-- Determining clusters from PCA results using clusGap() -->
 
 <!-- Clusters main lins -->
+<!--
 ```{r, echo=FALSE, warning=F, cache = F}
 # ------------------------------------------------------------------
 # 4. Elbow Method/Average Silhouette Method/Gap Statistic Method
@@ -390,13 +429,13 @@ Using clusGap() to predict optimal clusters
 # Plot each main lin:
 message("PCA plots of main lineages 1-4")
 theme_set(theme_classic())
-ggplot(data = Dummy_pca, 
+ggplot(data = PCAs, 
        aes(x = C1, y = C2
            # , colour = sub_lineage_2
            ))+
   geom_point(size = 1, alpha = 0.5)+
   xlab("PC1")+ylab("PC2")+
-  scale_colour_manual(values = rainbow(length(unique(Dummy_pca$sub_lineage_2))))+
+  scale_colour_manual(values = rainbow(length(unique(PCAs$sub_lineage_2))))+
   guides(colour = guide_legend(override.aes = list(size=7, alpha = 1)))+
   # theme(axis.text.y=element_text(size = Tick_sz, angle=45), 
   #       axis.text.x=element_text(size = Tick_sz))+
@@ -412,14 +451,14 @@ ggplot(data = Dummy_pca,
 # Get optimal clusts per main lin
 Opt_clusts_lin <- vector()
 Viz_clusts_main <- list()
-for (i in 1:length(unique(Dummy_pca$lineage))){
-  gap_stat <- clusGap(split(Dummy_pca, Dummy_pca[,"lineage"])[[i]][c("C1", "C2")], 
-                      FUN = hcut, nstart = 50 , K.max = 2, B =10)
+for (i in 1:length(unique(PCAs$lineage))){
+  gap_stat <- clusGap(split(PCAs, PCAs[,"lineage"])[[i]][c("C1", "C2")], 
+                      FUN = hcut, nstart = 20 , K.max = 20, B = 500)
   Opt_clusts_lin[i] <- maxSE(f = gap_stat$Tab[, "gap"], 
                              SE.f = gap_stat$Tab[, "SE.sim"]) # Not sure why so obscure
   
   # Plot clusts main lineage
-  Data <- Dummy_pca[Dummy_pca[,"lineage"] == unique(Dummy_pca[,"lineage"])[i],
+  Data <- PCAs[PCAs[,"lineage"] == unique(PCAs[,"lineage"])[i],
                     c("C1", "C2")]
   Km <- kmeans(Data, Opt_clusts_lin[i], nstart = 25)
   Viz_clusts_main[[i]] <- fviz_cluster(Km, Data,
@@ -432,10 +471,10 @@ for (i in 1:length(unique(Dummy_pca$lineage))){
           axis.ticks = element_blank(), 
           legend.position = "none", 
           plot.title = element_text(size=8, hjust = 0.5))+
-    ggtitle(unique(Dummy_pca[,"lineage"])[i])
+    ggtitle(unique(PCAs[,"lineage"])[i])
 }
 message("Optimal number of clusters by clusGap, main lineage")
-Opt_clusts_lin
+data.frame(unique(PCAs[,"lineage"]), Opt_clusts_lin, row.names = NULL)
 message("Clustering of main lineages")
 Viz_clusts_main_all <- grid.arrange(grobs = Viz_clusts_main,
                                left = textGrob("PC2", rot = 90, 
@@ -443,43 +482,70 @@ Viz_clusts_main_all <- grid.arrange(grobs = Viz_clusts_main,
                                                x = unit(1, "npc")), 
                                bottom = textGrob("PC1", gp=gpar(fontsize=11)))
 ```
+-->
+
 <!-- Clusters sublins -->
 ```{r, echo=FALSE, warning=F, cache = F}
 
 message("PCA plots of each sub-lineage (first decimal place)")
 # Plot each sublin (first decimal place):
 theme_set(theme_classic())
-ggplot(data = Dummy_pca, 
-       aes(x = C1, y = C2, colour = sub_lineage_2))+
+
+# ggplot(data = PCAs, 
+#        aes(x = C1, y = C2, colour = sub_lineage_2))+
+#   geom_point(size = 1, alpha = 0.5)+
+#   xlab("PC1")+ylab("PC2")+
+#   guides(colour = guide_legend(override.aes = list(size=7, alpha = 1)))+
+#   scale_colour_manual(values = rainbow(length(unique(PCAs$sub_lineage_2))))+
+#   # theme(axis.text.y=element_text(size = Tick_sz, angle=45), 
+#   #       axis.text.x=element_text(size = Tick_sz))+
+#     theme(axis.text.x = element_blank(), 
+#         axis.text.y = element_blank(),
+#         axis.ticks = element_blank(), 
+#         legend.position = "none",
+#         strip.text.x = element_text(),
+#         strip.text.y = element_text(),
+#         strip.background = element_rect(colour="white"))+
+#   facet_wrap(~ sub_lineage_2, scales = "free")
+
+# i <- 1
+PCA_plots <- list()
+for(i in seq(Lin_names_first_dec)){
+Data <- PCAs[PCAs["sub_lineage_2"] == Lin_names_first_dec[i], ]
+PCA_plots[[i]] <- ggplot(data = Data, 
+       aes(x = C1, y = C2, colour = sub_lineage))+
   geom_point(size = 1, alpha = 0.5)+
   xlab("PC1")+ylab("PC2")+
-  guides(colour = guide_legend(override.aes = list(size=7, alpha = 1)))+
-  scale_colour_manual(values = rainbow(length(unique(Dummy_pca$sub_lineage_2))))+
+  guides(colour = guide_legend(override.aes = list(size=5, alpha = 1)))+
+  scale_colour_manual(values = rainbow(length(unique(Data$sub_lineage))))+
   # theme(axis.text.y=element_text(size = Tick_sz, angle=45), 
   #       axis.text.x=element_text(size = Tick_sz))+
     theme(axis.text.x = element_blank(), 
         axis.text.y = element_blank(),
-        axis.ticks = element_blank(), 
-        legend.position = "none",
-        strip.text.x = element_text(),
-        strip.text.y = element_text(),
-        strip.background = element_rect(colour="white"))+
-  facet_wrap(~ sub_lineage_2, scales = "free")
+        axis.ticks = element_blank()
+        # ,legend.position = "none"
+        # ,strip.text.x = element_text(),
+        # strip.text.y = element_text(),
+        # strip.background = element_rect(colour="white")
+        )
+}
 
+PCA_plots
 
-# Get optimal clusts per main lin
+# Get optimal clusts per sub lin
 Opt_clusts_sublin <- vector()
 Viz_clusts_sublin <- list()
-for (i in 1:length(unique(Dummy_pca$sub_lineage_2))){
-  gap_stat <- clusGap(split(Dummy_pca, Dummy_pca[,"sub_lineage_2"])[[i]][c("C1", "C2")], 
-                      FUN = hcut, nstart = 50 , K.max = 2, B =10)
-  Opt_clusts_sublin[i] <- maxSE(f = gap_stat$Tab[, "gap"], 
-                             SE.f = gap_stat$Tab[, "SE.sim"]) # Not sure why so obscure
-  
+for (i in 1:length(unique(PCAs$sub_lineage_2))){
+  # gap_stat <- clusGap(split(PCAs, PCAs[,"sub_lineage_2"])[[i]][c("C1", "C2")], 
+  #                     FUN = hcut, nstart = 50 , K.max = 20, B = 10)
+  # Opt_clusts_sublin[i] <- maxSE(f = gap_stat$Tab[, "gap"], 
+  #                            SE.f = gap_stat$Tab[, "SE.sim"]) # Not sure why so obscure
+  # 
   # Plot clusts main lineage
-  Data <- Dummy_pca[Dummy_pca[,"sub_lineage_2"] == unique(Dummy_pca[,"sub_lineage_2"])[i],
+  Data <- PCAs[PCAs[,"sub_lineage_2"] == unique(PCAs[,"sub_lineage_2"])[i],
                     c("C1", "C2")]
-  Km <- kmeans(Data, Opt_clusts_sublin[i], nstart = 25)
+  Km <- kmeans(Data, FB_df$N_clusters[i], nstart = 25)
+  
   Viz_clusts_sublin[[i]] <- fviz_cluster(Km, Data,
                                   labelsize = 0, 
                                   pointsize = 1, main = NULL,
@@ -490,20 +556,22 @@ for (i in 1:length(unique(Dummy_pca$sub_lineage_2))){
           axis.ticks = element_blank(), 
           legend.position = "none", 
           plot.title = element_text(size=8, hjust = 0.5))+
-    ggtitle(unique(Dummy_pca[,"sub_lineage_2"])[i])
+    ggtitle(unique(PCAs[,"sub_lineage_2"])[i])
 }
-message("Optimal number of clusters by clusGap, sub-lineages (first decimal place)")
-Opt_clusts_sublin
-message("Clustering of sub-lineages (first decimal place)")
-Viz_clusts_sublin_all <- grid.arrange(grobs = Viz_clusts_sublin,
-                               left = textGrob("PC2", rot = 90, 
-                                               gp=gpar(fontsize=11), 
-                                               x = unit(1, "npc")), 
-                               bottom = textGrob("PC1", gp=gpar(fontsize=11)))
+# Table of optimal clusters 
+#message("Optimal number of clusters by clusGap, sub-lineages (first decimal place)")
+# data.frame(Lin = unique(PCAs[,"sub_lineage_2"]), 
+#            Optimal_clusts = Opt_clusts_sublin, row.names = NULL)
 
+message("Clustering of sub-lineages (first decimal place)")
+# Viz_clusts_sublin_all <- grid.arrange(grobs = Viz_clusts_sublin,
+#                                left = textGrob("PC2", rot = 90, 
+#                                                gp=gpar(fontsize=11), 
+#                                                x = unit(1, "npc")), 
+#                                bottom = textGrob("PC1", gp=gpar(fontsize=11)))
+Viz_clusts_sublin
 
 ```
-
 
 
 
