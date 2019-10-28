@@ -3,7 +3,6 @@ from networkx.algorithms.components.connected import connected_components
 import networkx
 import argparse
 import json
-from colour import Color
 import os
 import sys
 import subprocess
@@ -55,7 +54,7 @@ def index_vcf(vcf_file, threads=4, overwrite=False):
     if filecheck(vcf_file):
         if nofile(vcf_file+".csi"):
             run_cmd(cmd)
-        elif os.path.getmtime(vcf_file+".csi") < os.path.getmtime(vcf_file) or overwrite:
+        elif (os.path.getmtime(vcf_file+".csi") < os.path.getmtime(vcf_file)) or overwrite:
             run_cmd(cmd)
 
 
