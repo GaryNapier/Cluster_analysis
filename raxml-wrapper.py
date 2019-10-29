@@ -82,7 +82,7 @@ parser.add_argument('--msa',help='Prefix for files',required=True)
 parser.add_argument('--threads',default=4, type=int, help='Number of threads for parallel operations')
 parser.add_argument('--starting-trees',default=24, type=int, help='Number of starting trees')
 parser.add_argument('--bs-trees',default=100, type=int, help='Number of bootstrap trees')
-parser.add_argument('--dru-run',action="store_true", help='Print commands to run to file and exit')
+parser.add_argument('--dry-run',action="store_true", help='Print commands to run to file and exit')
 parser.set_defaults(func=main)
 
 args = parser.parse_args()
