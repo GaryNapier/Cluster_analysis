@@ -33,7 +33,7 @@ def main(args):
     			something_changed = True
     			row[i] = ":".join(fmt)
     	if something_changed:
-    		sys.stdout.write("\t".join(row)+"\n")
+    		sys.stdout.write("\\t".join(row)+"\\n")
     	else:
     		sys.stdout.write(l)
 
