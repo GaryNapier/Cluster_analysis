@@ -7,6 +7,43 @@ rand_generator = random.SystemRandom()
 
 # version = 1.0
 
+def write_set_GT_script():
+    open("setGT.py","w").write("""#! /usr/bin/env python
+import sys
+from tqdm import tqdm
+import argparse
+
+def main(args):
+    ad_cutoff = args.fraction
+    for l in tqdm(sys.stdin):
+    	something_changed = False
+    	row = l.strip().split()
+    	if l[0]=="#":
+    		sys.stdout.write(l)
+    		continue
+    	for i in range(9,len(row)):
+    		fmt = row[i].split(":")
+    		ad = [int(x) for x in fmt[1].split(",")]
+    		total_ad = sum(ad)
+    		if total_ad==0:continue
+    		adf = [ad[j]/total_ad for j in range(len(ad))]
+    		if max(adf)>=ad_cutoff:
+    			gt = adf.index(max(adf))
+    			fmt[0] = f"{gt}/{gt}"
+    			something_changed = True
+    			row[i] = ":".join(fmt)
+    	if something_changed:
+    		sys.stdout.write("\\t".join(row)+"\\n")
+    	else:
+    		sys.stdout.write(l)
+
+parser = argparse.ArgumentParser(description='TBProfiler pipeline',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('--fraction',default=0.7,type=float,help='Fraction of coverage to assign major')
+parser.set_defaults(func=main)
+
+args = parser.parse_args()
+args.func(args)""")
+
 
 def get_random_file(prefix=None, extension=None):
     randint = rand_generator.randint(1, 999999)
@@ -148,6 +185,7 @@ class vcf_class:
 
 
 def main(args):
+    write_set_GT_script()
     FAILED_SAMPLES = open("%s.failed_samples.log" % args.prefix, "w")
     params = {"threads": args.threads, "prefix": args.prefix, "ref": args.ref}
     params["map_file"] = "%s.map" % (args.prefix)
@@ -190,7 +228,7 @@ def main(args):
     if nofile("%(prefix)s.raw.vcf.gz" % params) or stages[args.redo] <= 2:
         run_cmd("gatk --java-options \"-Xmx40g\" GenotypeGVCFs -R %(ref)s -V gendb://%(prefix)s_genomics_db -O %(prefix)s.raw.vcf.gz" % params, verbose=2)
     if nofile("%(prefix)s.filt.vcf.gz" % params) or stages[args.redo] <= 3:
-        run_cmd("bcftools view -V indels %(prefix)s.raw.vcf.gz | bcftools filter -e 'GT=\"het\"' -S . | awk 'length($4)==1 || $0~/^#/' | tr '|' '/' | tr '*' '.' | bcftools view -a | bcftools view -c 1 -Oz -o %(prefix)s.filt.vcf.gz" % params)
+        run_cmd("bcftools view -V indels %(prefix)s.raw.vcf.gz | python setGT.py | bcftools filter -e 'GT=\"het\"' -S . | awk 'length($4)==1 || $0~/^#/' | tr '|' '/' | tr '*' '.' | bcftools view -a | bcftools view -c 1 -Oz -o %(prefix)s.filt.vcf.gz" % params)
     vcf = vcf_class("%s.filt.vcf.gz" % (args.prefix))
     if nofile("%(prefix)s.snps.fa" % vars(vcf)) or stages[args.redo] <= 4:
         vcf.vcf_to_fasta(args.ref)
