@@ -35,9 +35,16 @@ DATA
 )
 	for s in meta:
 		itol_text = itol_text + "%s\t%s\n" % (s,colours[meta[s]])
+	open("%s.lineage_strip.itol.txt" % args.lineages.replace(",","_"),"w").write(itol_text)
 
-	print(itol_text)
+	itol_text = """TREE_COLORS
+SEPARATOR TAB
 
+DATA
+"""
+	for s in meta:
+		itol_text = itol_text + "%s\tbranch\t%s\tnormal\n" % (s,colours[meta[s]])
+	open("%s.lineage_branches.itol.txt" % args.lineages.replace(",","_"),"w").write(itol_text)
 
 parser = argparse.ArgumentParser(description='TBProfiler pipeline',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('--csv',type=str,help='CSV with lineages',required=True)
