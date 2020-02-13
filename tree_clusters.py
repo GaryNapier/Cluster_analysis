@@ -21,6 +21,7 @@ from ete3.treeview.faces import add_face_to_node
 from itertools import chain
 import scipy
 from scipy.stats import iqr
+from matplotlib.backends.backend_pdf import PdfPages
 
 def run_cmd(cmd,verbose=1,target=None):
 	"""
@@ -72,9 +73,9 @@ def get_leaves_in_clusts(tree_file, node_cutoff, bootstrap_cutoff):
 	# Clades have to be > 50 bootstrap an min of 20 samples (by default)
 	leaves = list()
 	for node in t.traverse("preorder"):
-		# Do some analysis on node 
+		# Do some analysis on node
 		if len(node) > node_cutoff and node.support >= bootstrap_cutoff:
-			# print(node) 
+			# print(node)
 			# print(node.name)
 			# print(node.support)
 			leaves.append([n.name for n in node.get_leaves()])
@@ -84,7 +85,7 @@ def do_anosim(leaf_list, all_other_samps, dist, test_stat, perm=99):
 	# http://scikit-bio.org/docs/0.5.5/generated/skbio.stats.distance.anosim.html#skbio.stats.distance.anosim
 	# Convert pandas distance matrix to DistanceMatrix object
 	dist = DistanceMatrix(dist)
-	# Need to create two groups for anosim - samples in leaf list and all other samples 
+	# Need to create two groups for anosim - samples in leaf list and all other samples
 	grouping = [["Cluster"]*len(leaf_list), ["Everything_else"]*len(all_other_samps)]
 	grouping = list(chain.from_iterable(grouping)) # Unlist groups into one list
 	# Do anosim
@@ -93,24 +94,24 @@ def do_anosim(leaf_list, all_other_samps, dist, test_stat, perm=99):
 	# return clust_samps_list
 
 def make_itol(samples, file_nm, lineage):
-	col = ['#ff0000']*len(samples)    
-	df = pd.DataFrame(list(zip(samples, col)))  
-	df.to_csv(file_nm, sep="\t", quoting=csv.QUOTE_NONE, index = False, header = False)   
+	col = ['#ff0000']*len(samples)
+	df = pd.DataFrame(list(zip(samples, col)))
+	df.to_csv(file_nm, sep="\t", quoting=csv.QUOTE_NONE, index = False, header = False)
 
 	run_cmd("cp itol_templates/dataset_color_strip_template.txt lin_%s/results/%s" % (lineage, file_nm))
 	run_cmd("cat %s >> lin_%s/results/%s" % (file_nm, lineage, file_nm) )
 
 def do_clustering(tree_file, matrix_file, samples):
 	# Load matrix file. Must be in same format as here: https://github.com/etetoolkit/ete/blob/master/examples/clustering/diauxic.array
-	# i.e. the sample names are the first column and the column headers are the first row. 
+	# i.e. the sample names are the first column and the column headers are the first row.
 	# The samples and column headers are therefore PART of the data, not just indices, so have to do this convoluted operation:
 
 	# Read in the matrix without headers (assuming there are no headers), but add headers as samples
-	matrix = pd.read_csv(matrix_file, sep='\t', header = None, names=samples) 
+	matrix = pd.read_csv(matrix_file, sep='\t', header = None, names=samples)
 	# Add samples as row indices/row names
 	matrix.index = samples
 	# Write this to a temporary file as a tab-separated text file
-	matrix.to_csv("matrix_file_tmp.txt", sep = "\t")  
+	matrix.to_csv("matrix_file_tmp.txt", sep = "\t")
 	# Need a string of text to now fill the first position (because the headers and row names are now part of the data)
 	# Needs to be '#NAMES'
 	# Headers and row names should now be part of data
@@ -121,7 +122,7 @@ def do_clustering(tree_file, matrix_file, samples):
 	# Loads tree and array
 	t = ClusterTree(tree_file, "matrix_file_tmp.txt")
 	# Remove temp file
-	run_cmd("rm matrix_file_tmp.txt")	
+	run_cmd("rm matrix_file_tmp.txt")
 	# nodes are linked to the array table
 	array = t.arraytable
 	# Calculates some stats on the matrix. Needed to establish the colour gradients.
@@ -189,24 +190,34 @@ def cohend(d1, d2):
 def run(args):
 	lineage = args.input # these match the "dest": dest="input"
 	# tree_file = "lin_%s/results/lin_%s.iqtree.treefile" % (lineage, lineage)
-	tree_file = "lin_%s/results/lin_%s.iqtree.treefile" % (lineage, lineage)
-	mds_file = "lin_%s/results/lin_%s_results.filt.pca.mds" % (lineage, lineage)
-	dist_file = "lin_%s/results/lin_%s_results.filt.dist" % (lineage, lineage)
-	node_cutoff = args.node_cutoff 
+	# tree_file = "lin_{0}/results/lin_{0}.iqtree.treefile".format(lineage) # % (lineage, lineage)
+	# mds_file = "lin_%s/results/lin_%s_results.filt.pca.mds" % (lineage, lineage)
+	# dist_file = "lin_%s/results/lin_%s_results.filt.dist" % (lineage, lineage)
+
+	tree_file = args.tree_file
+	mds_file = args.mds_file
+	dist_file = args.dist_file
+	node_cutoff = args.node_cutoff
 	bootstrap_cutoff = args.bootstrap_cutoff
 	# "R" value - 0.75 < R < 1 - highly different; 0.5 < R < 0.75 -  different; 0.25 < R < 0.5 -  different with some overlap; 0.1 < R < 0.25 - high overlap; R < 0.1 - similar
 	# See https://www.researchgate.net/post/Which_R_value_is_considered_to_show_a_strong_difference_between_the_groups_in_ANOSIM
-	test_stat = args.test_stat 
+	test_stat = args.test_stat
 	do_t_test = args.do_t_test
-	show_plots = args.show_plots
+	do_plots = args.do_plots
 	do_anosim_analysis = args.do_anosim_analysis
 	metadata = args.metadata
 	do_clustering_analysis = args.do_clustering_analysis
 	if metadata == "":
 		do_clustering_analysis = 0
+	get_outlers = args.get_outlers
+	clust_nums = args.clust_nums.split(",")
+
+	clust_nums = [int(i) for i in clust_nums]
+	clust_nums = [x-1 for x in clust_nums] # Pathetic python indexing - have to subtract 1
+	print(clust_nums)
 
 
-	off_diag = -1 # Have to specify off-diagonal with '-1'. 
+	off_diag = -1 # Have to specify off-diagonal with '-1'.
 
 	if test_stat < -1 or test_stat > 1:
 		sys.exit("Please choose R value (-r) between -1 and 1")
@@ -224,21 +235,21 @@ def run(args):
 		line = [i.strip() for i in line.split(' ')] # Make into individual strings
 		line = [i for i in line if i] # Remove empty strings(formerly spaces)
 		samples.append(line[0]) # Save first entry (col)
-	
+
 	samples = samples[1:] # Remove column header
 
 	# Read in lineages table
-	lineages_master = pd.read_csv("all_lins/txt/lineages_master.txt", sep='\t') 
+	lineages_master = pd.read_csv("all_lins/txt/lineages_master.txt", sep='\t')
 	# Get unique sublineages
 	sublins = lineages_master.loc[lineages_master["first_dec"] == lineage, ].sub_lineage.unique()
 	# Subset lins table to only include those in the tree/from mds file
 	lineages_master = lineages_master[lineages_master["sample"].isin(samples)]
 
-	# Read in distance matrix setting and set header and index as sample IDs. 
-	dist = pd.read_csv(dist_file, sep='\t', names=samples) 
+	# Read in distance matrix setting and set header and index as sample IDs.
+	dist = pd.read_csv(dist_file, sep='\t', names=samples)
 	dist.index = samples
 
-	# Get tree 
+	# Get tree
 	t = read_tree(tree_file)
 
 	# Traverse tree, subset distance matrix according to leaf names and do tests on distance matrix
@@ -248,23 +259,41 @@ def run(args):
 	clust_num = 0 # Loop counter
 	ts = TreeStyle() # Tree display setup
 	ts.mode = "c" # draw tree in circular mode
-	ts.show_leaf_name = False 
+	ts.show_leaf_name = False
 	ts.show_branch_length = True
 	ts.show_branch_support = True
 	ts.title.add_face(TextFace("Lineage %s" % lineage, fsize=len(t)/4), column=0) # Add title to tree
 	ts.layout_fn = layout
 	colours = sns.hls_palette(len(sublins), l = 0.9, s = 0.7).as_hex()
-	
+	bxplt_file = "lin_%s/results/lin_%s_boxplots.pdf" % (lineage, lineage) # Set up boxplots file
+	pdf = PdfPages(bxplt_file) # Set up to save as pdf
+	round_place = 2
 
-	# Traverse tree loop 
+	# Set up table for tree traverse loop
+	clust_num_vect = []
+	t_test_stat_vect = []
+	p_val_vect = []
+	es_vect = []
+	n_vect = []
+	n_dist_vect = []
+	min_win_vect = []
+	max_win_vect = []
+	sum_win_vect = []
+	mean_win_vect = []
+	med_win_vect = []
+	min_btwn_vect =[]
+	max_btwn_vect = []
+	sum_btwn_vect = []
+	mean_btwn_vect = []
+	med_btwn_vect = []
+	diff_vect = []
+
+	# Traverse tree loop
 	for node in t.traverse("preorder"):
 
 		# Get leaves
 		if len(node) > node_cutoff and node.support >= bootstrap_cutoff:
 			leaf_list = [n.name for n in node.get_leaves()]
-			print("-------------")
-			print(leaf_list)
-			print("-------------")
 		else:
 			continue
 
@@ -280,81 +309,83 @@ def run(args):
 		subdist_btwn = np.array(dist.loc[leaf_list, all_other_samps])
 		subdist_btwn = subdist_btwn.reshape(subdist_btwn.shape[0]*subdist_btwn.shape[1], ) # Turn to vector
 
-
 		# Do t-tests
 		if do_t_test == 1:
-
 			t_test = stats.ttest_ind(subdist_within_lt, subdist_btwn, equal_var=False)
-			effect_sz = cohend(subdist_within_lt, subdist_btwn)
+			effect_sz = round(cohend(subdist_within_lt, subdist_btwn), round_place)
 
 			if t_test.pvalue <= 0.05:
 				clust_num += 1
+				clust_num_vect.append(clust_num)
+				t_test_stat_vect.append(round(t_test[0], round_place))
+				p_val_vect.append(round(t_test[1], round_place))
+				es_vect.append(effect_sz)
+				n_vect.append(round(len(leaf_list), round_place))
+				n_dist_vect.append(round(len(subdist_within_lt), round_place))
+				min_win_vect.append(round(np.min(subdist_within_lt), round_place))
+				max_win_vect.append(round(np.max(subdist_within_lt), round_place))
+				sum_win_vect.append(round(np.sum(subdist_within_lt), round_place))
+				mean_win_vect.append(str(round(np.mean(subdist_within_lt), round_place)) + " (" + str(round(np.std(subdist_within_lt, ddof=1), round_place)) + ")")
+				med_win_vect.append(str(round(np.median(subdist_within_lt), round_place)) + " (" + str(round(robust.mad(subdist_within_lt), round_place)) + ")")
+				min_btwn_vect.append(round(np.min(subdist_btwn), round_place))
+				max_btwn_vect.append(round(np.max(subdist_btwn), round_place))
+				sum_btwn_vect.append(round(np.sum(subdist_btwn), round_place))
+				mean_btwn_vect.append(str(round(np.mean(subdist_btwn), round_place)) + " (" + str(round(np.std(subdist_btwn, ddof=1), round_place)) + ")")
+				med_btwn_vect.append(str(round(np.median(subdist_btwn), round_place)) + " (" + str(round(robust.mad(subdist_btwn), round_place)) + ")")
+				diff_vect.append(round(abs(np.sum(subdist_within_lt) - np.sum(subdist_btwn)), round_place))
 
-				# Stats stuff: 
+				if get_outlers:
+					# Get outliers
+					q1_within = np.percentile(subdist_within_lt, 25)
+					q3_within = np.percentile(subdist_within_lt, 75)
+					iqr = abs(q1_within - q3_within) # interquartile range (Q1 - Q3)
+					outliers_within_stat = [q1_within - (1.5*iqr), q3_within+(1.5*iqr)]
 
-				within_dict = {"Within":"Within", "n_samps":len(leaf_list), "n_dist":len(subdist_within_lt), "Min": np.min(subdist_within_lt), "Max":np.max(subdist_within_lt), \
-				 "Sum":np.sum(subdist_within_lt), "Mean": np.mean(subdist_within_lt), "Median": np.median(subdist_within_lt), "sd": np.std(subdist_within_lt, ddof=1), "mad": robust.mad(subdist_within_lt)}
-				btwn_dict = {"Between":"Between", "n_samps":len(all_other_samps), "n_dist":len(subdist_btwn), "Min": np.min(subdist_btwn), "Max":np.max(subdist_btwn), "Sum":np.sum(subdist_btwn), \
-				 "Mean": np.mean(subdist_btwn), "median": np.median(subdist_btwn), "sd": np.std(subdist_btwn, ddof=1), "mad": robust.mad(subdist_btwn)}
+					q1_btwn = np.percentile(subdist_btwn, 25)
+					q3_btwn = np.percentile(subdist_btwn, 75)
+					iqr = abs(q1_btwn - q3_btwn)
+					outliers_btwn_stat = [q1_btwn - (1.5*iqr), q3_btwn+(1.5*iqr)]
 
-				# Get outliers
-				q1_within = np.percentile(subdist_within_lt, 25)
-				q3_within = np.percentile(subdist_within_lt, 75)
-				iqr = abs(q1_within - q3_within) # interquartile range (Q1 - Q3)
-				outliers_within_stat = [q1_within - (1.5*iqr), q3_within+(1.5*iqr)]
+					print("Outliers within: ", outliers_within_stat)
+					print("Outliers between: ", outliers_btwn_stat)
 
-				q1_btwn = np.percentile(subdist_btwn, 25)
-				q3_btwn = np.percentile(subdist_btwn, 75)
-				iqr = abs(q1_btwn - q3_btwn)
-				outliers_btwn_stat = [q1_btwn - (1.5*iqr), q3_btwn+(1.5*iqr)]
+					print(subdist_within_table)
 
-				print("Outliers within: ", outliers_within_stat)
-				print("Outliers between: ", outliers_btwn_stat)
+					outliers_within = []
+					for row_ind, row in enumerate(subdist_within_table.index.values):
+						for col_ind, col in enumerate(subdist_within_table.columns.values):
+							if col >= row: # Lower triangle
+								continue
+							if subdist_within_table.loc[row, col] <= outliers_within_stat[0] or subdist_within_table.loc[row, col] >= outliers_within_stat[1]:
+								outliers_within.append([row, col])
 
-				# print(subdist_within_table)
+					outliers_within = list(set(list(chain.from_iterable(outliers_within)))) # Unlist and get unique
+					print("Outliers within, clust %s: " % clust_num, outliers_within)
 
-				outliers_within = []
-				for row_ind, row in enumerate(subdist_within_table.index.values):
-					for col_ind, col in enumerate(subdist_within_table.columns.values):
-						if col >= row: # Lower triangle
-							continue
-						if subdist_within_table.loc[row, col] <= outliers_within_stat[0] or subdist_within_table.loc[row, col] >= outliers_within_stat[1]:
-							outliers_within.append([row, col])
+					outliers_btwn = []
+					for row_ind, row in enumerate(subdist_btwn_table.index.values):
+						for col_ind, col in enumerate(subdist_btwn_table.columns.values):
+							if subdist_btwn_table.loc[row, col] <= outliers_btwn_stat[0] or subdist_btwn_table.loc[row, col] >= outliers_btwn_stat[1]:
+								outliers_btwn.append([row, col])
 
-				outliers_within = list(set(list(chain.from_iterable(outliers_within)))) # Unlist and get unique
-				print("Outliers within, clust %s: " % clust_num, outliers_within)
-
-				outliers_btwn = []
-				for row_ind, row in enumerate(subdist_btwn_table.index.values):
-					for col_ind, col in enumerate(subdist_btwn_table.columns.values):
-						if subdist_btwn_table.loc[row, col] <= outliers_btwn_stat[0] or subdist_btwn_table.loc[row, col] >= outliers_btwn_stat[1]:
-							outliers_btwn.append([row, col])
-
-				outliers_btwn = list(set(list(chain.from_iterable(outliers_btwn))))
-				print("Outliers between, clust %s: " % clust_num, outliers_btwn)				
-
-
-				print("Clust num: ", clust_num)
-				print(t_test)
-				print("Effect size (d):", effect_sz)
-				print(within_dict)
-				print(btwn_dict)
-				print("Diff: ", abs(within_dict["Sum"] - btwn_dict["Sum"]))
+					outliers_btwn = list(set(list(chain.from_iterable(outliers_btwn))))
+					print("Outliers between, clust %s: " % clust_num, outliers_btwn)
 
 				# Do boxplots
-				if show_plots == 1:
-					bxplt = sns.boxplot(data=[subdist_within_lt, subdist_btwn]) #.set_ylim([0, np.max(dist)])
-					bxplt.set_title("Clust"+str(clust_num)) # set(xlabel = ["Within", "Between"]) #, x = "Group", y = "Distance", order = ["Within", "Between"])
-					bxplt.set_ylim([-100, dist.max().max()+0.1*dist.max().max()])	
-					# fig = img.get_figure()
-					# fig.savefig()
-					# fig.clf()
-					plt.show()
+				if do_plots == 1:
+					bxplt = sns.boxplot(data=[subdist_within_lt, subdist_btwn])
+					bxplt.set_title("Clust"+str(clust_num))
+					bxplt.set_ylim([-100, dist.max().max()+0.1*dist.max().max()])
+					pdf.savefig()
+					plt.close()
 
 				# Tree stuff:
 
 				# l_width = abs(t_test.statistic) * 0.05 # Set thickness of line based on test stat degree
-				l_width = abs(effect_sz) * 10 # Set thickness of line based on effect size
+				l_width = round(abs(effect_sz), 2) * 10 # Set thickness of line based on effect size
+				node.add_features(effect_size = round(abs(effect_sz), 2)) # Store effect size in node as attribute (so can export as newick).
+				node.add_features(clust_num = clust_num) # Store cluster number in node
+
 				colour = "#ff0000"
 
 				style = NodeStyle()
@@ -362,7 +393,6 @@ def run(args):
 				style["size"] = 0
 				style["vt_line_color"] = colour
 				style["hz_line_color"] = colour
-				# style["vt_line_width"] = l_width
 				style["hz_line_width"] = l_width
 				style["vt_line_type"] = 0 # 0 solid, 1 dashed, 2 dotted
 				style["hz_line_type"] = 0
@@ -371,24 +401,13 @@ def run(args):
 				node.add_face(clust_num_annotation, column=1, position = "branch-bottom")
 
 				# make_itol(leaf_list, "clust_"+str(clust_num)+".txt", lineage)
-
 			# else:
-
-				# style = NodeStyle()
-				# style["fgcolor"] = "#0f0f0f"
-				# style["size"] = 0
-				# style["vt_line_color"] = "blue"
-				# style["hz_line_color"] = "blue"
-				# style["vt_line_width"] = 1
-				# style["hz_line_width"] = 1
-				# style["vt_line_type"] = 0 # 0 solid, 1 dashed, 2 dotted
-				# style["hz_line_type"] = 0
-				# node.set_style(style)			
+			# 	node.rad = 0 # Effect size stored as 0 if not significant
 
 		# Do anosim:
 		if do_anosim_analysis:
 			anosim_res = do_anosim(leaf_list, all_other_samps, dist, test_stat)
-			# Save samples 
+			# Save samples
 			# if < 0.05 p-val and > 0.5 # R test stat ("Different groups" - https://www.researchgate.net/post/Which_R_value_is_considered_to_show_a_strong_difference_between_the_groups_in_ANOSIM)
 			if anosim_res.loc["p-value"] < 0.05 and anosim_res.loc["test statistic"] >= test_stat:
 				clust_samps_list.append(leaf_list)
@@ -397,10 +416,13 @@ def run(args):
 
 	for i in clust_samps_list:
 		print(i)
-		print("-------------")		
+		print("-------------")
+
+	if do_plots == 1:
+		pdf.close()
 
 	# Clustering
-	# Nb, as long as the read_tree() function has run on the tree_file, then the .rooted file should be available. 
+	# Nb, as long as the read_tree() function has run on the tree_file, then the .rooted file should be available.
 	# get_leaves_in_clusts() runs the read_tree() function
 	if do_clustering_analysis == 1:
 		do_clustering(tree_file+".rooted", metadata, samples)
@@ -413,21 +435,40 @@ def run(args):
 		nst["bgcolor"] = colours[i]
 		t.get_common_ancestor(list(samps_sublin)).set_style(nst)
 
+	print("---------------------------")
+	print(t.write(features=[])) # Print Newick file
 	t.show(tree_style=ts)
 
+	# Collate and print stats
+	stats_dict = {"clust_num":clust_num_vect, "n":n_vect, "n_dist":n_dist_vect, "t_test_stat":t_test_stat_vect, "p":p_val_vect, "effect_size":es_vect,  \
+		 "min_w/in":min_win_vect, "max_w/in":max_win_vect, "sum_w/in":sum_win_vect, "mean_sd_w/in":mean_win_vect, "median_mad_w/in":med_win_vect, \
+		 "min_btwn":min_btwn_vect, "max_btwn":max_btwn_vect, "sum_btwn":sum_btwn_vect, "mean_sd_btwn":mean_btwn_vect, "median_mad_btwn":med_btwn_vect, "diff":diff_vect}
+	stats_df = pd.DataFrame(stats_dict)
+	pd.set_option('display.max_rows', 1000) # print all out
+	stats_df.index = stats_df.index + 1 # Python indexing again...
+	if clust_nums == 1:
+		print(stats_df)
+	else:
+		print(stats_df.iloc[clust_nums, ])
 
 def main():
 	parser=argparse.ArgumentParser(description="Find tree clusters")
 	parser.add_argument("-l",help="Lineage to analyse" ,dest="input", type=str, required=True)
 	# parser.add_argument("-out",help="output filename" ,dest="output", type=str, required=True)
+	# parser.add_argument("-pf", help="Files directory prefix", type = str, required=True)
+	parser.add_argument("-tf",help="Tree file", dest="tree_file", type = str, required=True)
+	parser.add_argument("-mf",help="pca mds file", dest="mds_file", type=str, required=True)
+	parser.add_argument("-df", help = "Distance matrix file", dest="dist_file", type=str, required=True)
+	parser.add_argument("-n", help="Which cluster numbers interested in? Comma-separated with no spaces e.g. 1,2,3", dest="clust_nums", type=str, default="1")
 	parser.add_argument("-s",help="Min number of samples in clusters" ,dest="node_cutoff", type=int, default=20)
 	parser.add_argument("-b",help="Min bootstrap for clusters" ,dest="bootstrap_cutoff", type=int, default=51)
 	parser.add_argument("-r",help="R value cutoff (-1<0<1) for anosim", dest="test_stat", type=float, default=0.5)
 	parser.add_argument("-t",help="0 = don't do t-test, 1 = do t-test, default = 0", dest="do_t_test", type=int, default=0)
-	parser.add_argument("-p", help="0 = don't show plots, 1 = show plots, default = 0", dest="show_plots", type=int, default=0)
+	parser.add_argument("-p", help="0 = don't show plots, 1 = show plots, default = 0", dest="do_plots", type=int, default=0)
 	parser.add_argument("-a", help="0 = don't do anosim analysis, 1 = do anosim analysis", dest="do_anosim_analysis", type=int, default=0)
 	parser.add_argument("-c", help="0 = don't do cluster analysis, 1 = do clustering analysis", dest="do_clustering_analysis", type=int, default=0)
 	parser.add_argument("-m", help="Metadata file for clustering analysis", dest="metadata", type=str, default="")
+	parser.add_argument("-o", help="0 = don't do outlier analyses, 1 = do outlier analyses", dest="get_outlers", type=int, default=0)
 	parser.set_defaults(func=run)
 	args=parser.parse_args()
 	args.func(args)
@@ -435,10 +476,4 @@ def main():
 if __name__=="__main__":
 	main()
 
-
-# test_samps = ['ERR046997', 'ERR072039', 'ERR1034655', 'ERR1034661']
-	# all_samps = test_samps + ['SRR058419', 'SRR058415', 'SRR057733', 'SRR058370']
-	# test_samps = ['SRR058417', 'SRR057731', 'SRR058373', 'SRR058116', 'SRR058399']
-	# all_samps  =['SRR058417', 'SRR057731', 'SRR058373', 'SRR058116', 'SRR058399', 'SRR058081', 'SRR058375', 'SRR057619', 'SRR058372', 'SRR057770', 'SRR058420']
-	# test_samps = ['ERR046997', 'ERR072039', 'ERR2517277', 'ERR551657', 'ERR551574', 'ERR1034655', 'ERR2516176', 'ERR1034661']
-	# all_samps = ['ERR046997', 'ERR072039', 'ERR2517277', 'ERR551657', 'ERR551574', 'ERR1034655', 'ERR2516176', 'ERR1034661', 'ERR2512852', 'ERR2517447', 'ERR2510830', 'ERR553390', 'ERR2514189', 'SRR2100564', 'ERR2517392', 'ERR2517428']
+# datetime.datetime(2020, 2, 13, 18, 0, 24, 694216)
