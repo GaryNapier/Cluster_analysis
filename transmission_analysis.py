@@ -105,22 +105,27 @@ def run(args):
     # ----------
     # Read in list of samples in lineage/clade
     lineage_samples =  pd.read_csv(lineage_file, sep='\t', names = None, header = None)
-    # Read in metadata
-    meta = pd.read_csv("all_lins/csv/tb10k.meta.csv", sep=',')
+    # Read in metadata for drug resistance
+    meta = pd.read_csv("all_lins/csv/tb10k.meta.csv", sep=',', na_filter = False)
 
-    print(meta.columns)
+    # Join transmission samples to drug resistance data
+    trans_dr = pd.merge(pd.DataFrame(transmission_samples, columns = ['id']), meta[['id', 'drtype']], on='id')
+    # Count drug-resistant samples
+    drug_resistance_pivot = pd.DataFrame(pd.pivot_table(trans_dr,index=["drtype"], values = ["drtype"], aggfunc = [len])).reset_index()
 
-    result = pd.merge(pd.DataFrame(transmission_samples, columns = ['id']), meta[['id', 'drtype']], on='id')
+    print(drug_resistance_pivot['drtype' == 'Drug-resistant'])
 
-    print(len(transmission_samples))
-    print(result)
-    print(len(result))
-    print(pd.pivot_table(result,index=["drtype"], values = ["drtype"], aggfunc = [len]))
+    # Put together table
+
+    # trans_df = pd.DataFrame({"Lin/cluster": lineage,
+    # "n in lineage/cluster": len(lineage_samples),
+    # "n samples in transmission": len(transmission_samples),
+    # "n drug-resistant": })
+
+    # print(df_test)
 
 
-
-    # len(lineage_samples)
-    # len(transmission_samples)
+    #
     # len(transmission_samples)/len(lineage_samples)
 
     # # --------------
@@ -172,4 +177,4 @@ def main():
 if __name__=="__main__":
 	main()
 
-# datetime.datetime(2020, 2, 13, 18, 7, 47, 320788)
+#datetime.datetime(2020, 2, 13, 19, 34, 34, 740336)
