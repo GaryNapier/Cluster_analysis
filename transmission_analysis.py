@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import csv
 import os
+import os.path
 import sys
 import subprocess as sp
 import ete3
@@ -50,26 +51,32 @@ def read_tree(tree_file):
 
 def run(args):
 
-    # ------------------
+    # ----------------
     # Setup/variables
-    # ------------------
+    # ----------------
+    round_place = 3
     path_command = "find -name "
     lineage = args.lineage
     dist_file = sp.getoutput(path_command+args.dist_file)
     mds_file = sp.getoutput(path_command+args.mds_file)
     tree_file = sp.getoutput(path_command+args.tree_file)
     lineage_file = sp.getoutput(path_command+args.lineage_file)
+    fst_file = sp.getoutput(path_command+args.fst_file)
+    transmission_table_output_file = args.transmission_table_output_file
+    trans_samps_output_file = args.trans_samps_output_file
 
     transmission_threshold = args.transmission_threshold
     bootstrap_cutoff = args.bootstrap_cutoff
     node_cutoff = args.node_cutoff
+    # prefix = args.prefix
 
-    # -------------------------
-    # Pull transmission samples
-    # -------------------------
-    # mds file to get sample names
+    # --------------
+    # Read in files
+    # --------------
+
+    # Read in mds file to get sample names
     with open(mds_file, mode='r') as mds_file:
-    	mds = list(csv.reader(mds_file, delimiter = "\t"))
+        mds = list(csv.reader(mds_file, delimiter = "\t"))
 
     # Get sample names from first column of mds file
     samples = list()
@@ -80,9 +87,24 @@ def run(args):
         samples.append(line[0]) # Save first entry (col)
     samples = samples[1:] # Remove column header
 
-    # Read in distance file
+    # Read in distance file & append samples from mds file as headers and row names
     dist = pd.read_csv(dist_file, sep='\t', names=samples)
     dist.index = samples
+
+    # Read in Fst file
+    fst_table =  pd.read_csv(fst_file, sep='\t', names = None, header = None)
+
+    # Read in list of samples in lineage/clade
+    # lineage_samples =  pd.read_csv(lineage_file, sep='\t', names = None, header = None)
+    with open(lineage_file, 'r') as f:
+        lineage_samples = f.read().splitlines()
+
+    # Read in metadata for drug resistance
+    meta = pd.read_csv("all_lins/csv/tb10k.meta.csv", sep=',', na_filter = False)
+
+    # --------------------------
+    # Pull transmission samples
+    # --------------------------
 
     transmission_samples = []
     for row_ind, row in enumerate(dist.index.values):
@@ -93,40 +115,78 @@ def run(args):
         if dist.loc[row, col] <= transmission_threshold:
           transmission_samples.append([row, col])
 
-    # Get unique
+    # Get unique trans samples as list
     transmission_samples = list(set([item for sublist in transmission_samples for item in sublist]))
 
-    # print out (use "> file.txt" to save)
-    for i in transmission_samples:
-        print(i)
+    # Subset transmission samples - only need those in the sublineage true sample list
+    transmission_samples = [item for item in transmission_samples if item in lineage_samples]
+
+    # Create dataframe of transmission samples
+    transmission_samples_df = pd.DataFrame(transmission_samples)
+
+    # Output all transmission samples, appending to file (create if doesn't exist)
+    if os.path.isfile(trans_samps_output_file):
+        transmission_samples_df.to_csv(trans_samps_output_file, mode = 'a', header = False, sep = "\t", index = False) # append
+    else:
+        transmission_samples_df.to_csv(trans_samps_output_file, mode = 'w', header = False, sep = "\t", index = False) # create
+
+    # transmission_samps_file = '%slin_%s_transmission_samps.txt' % (prefix, lineage)
+    # with open(transmission_samps_file, 'w') as f:
+    #     for item in transmission_samples:
+    #         f.write("%s\n" % item)
 
     # ----------
     # Get stats
     # ----------
-    # Read in list of samples in lineage/clade
-    lineage_samples =  pd.read_csv(lineage_file, sep='\t', names = None, header = None)
-    # Read in metadata for drug resistance
-    meta = pd.read_csv("all_lins/csv/tb10k.meta.csv", sep=',', na_filter = False)
 
     # Join transmission samples to drug resistance data
     trans_dr = pd.merge(pd.DataFrame(transmission_samples, columns = ['id']), meta[['id', 'drtype']], on='id')
+    print("----------trans_dr-------------")
+    print(trans_dr)
     # Count drug-resistant samples
     drug_resistance_pivot = pd.DataFrame(pd.pivot_table(trans_dr,index=["drtype"], values = ["drtype"], aggfunc = [len])).reset_index()
 
-    print(drug_resistance_pivot['drtype' == 'Drug-resistant'])
+    print("-------------- drug_resistance_pivot --------------")
+    print(drug_resistance_pivot)
+    print("---------drug_resistance_pivot.columns---------")
+    print(drug_resistance_pivot.columns)
+
+    drug_resistance_pivot.columns = ["drtype", "id_count"]
+
+
+    # Tidy pivot table - some values (e.g. 'XDR') will be missing, so need to interpolate with 0
+    # Make dict of true drtypes
+    drtypes_full_dict = {"Susceptible": None, "Drug-resistant": None, "MDR": None, "XDR": None, "NA": None}
+    # Loop though and pull values from pivot table or make 0
+    for drtype in drtypes_full_dict:
+        try:
+            drtypes_full_dict[drtype] = drug_resistance_pivot.loc[drug_resistance_pivot['drtype'] == drtype, 'id_count'].iloc[0]
+        except Exception as e:
+            drtypes_full_dict[drtype] = 0
+
+    # Get number of SNPs defining clade - i.e. Fst = 1
+    n_snps_define_clade = sum(fst_table.loc[fst_table.loc[:,0] == lineage, 3] == 1)
 
     # Put together table
+    transmission_df = pd.DataFrame({"Lin/cluster": [lineage],
+    "n in lineage/cluster": [len(lineage_samples)],
+    "n samples in transmission": [len(transmission_samples)],
+    "% transmission samples in lineage": [round(len(transmission_samples)/len(lineage_samples), round_place)],
+    "n suscepible": [drtypes_full_dict["Susceptible"]],
+    "n drug-resistant": [drtypes_full_dict["Drug-resistant"]],
+    "n MDR": [drtypes_full_dict["MDR"]],
+    "n XDR": [drtypes_full_dict["XDR"]],
+    "n NA": [drtypes_full_dict["NA"]],
+    "n SNPs defining lineage/clade": [n_snps_define_clade]})
 
-    # trans_df = pd.DataFrame({"Lin/cluster": lineage,
-    # "n in lineage/cluster": len(lineage_samples),
-    # "n samples in transmission": len(transmission_samples),
-    # "n drug-resistant": })
+    print(transmission_df)
 
-    # print(df_test)
-
-
-    #
-    # len(transmission_samples)/len(lineage_samples)
+    # Check if transmission analysis table file exists
+    # If so then append results to table if not then create it
+    if os.path.isfile(transmission_table_output_file):
+        transmission_df.to_csv(transmission_table_output_file, mode='a', header=False, sep = "\t", index = False) # append
+    else:
+        transmission_df.to_csv(transmission_table_output_file, mode='w', header=True, sep = "\t", index = False) # create
 
     # # --------------
     # # Tree analysis
@@ -167,6 +227,10 @@ def main():
     parser.add_argument("-mds",help="mds file", dest="mds_file", type=str, required=True)
     parser.add_argument("-tf",help="tree file", dest="tree_file", type = str)
     parser.add_argument("-lf", help = "lineage samples file", dest = "lineage_file", type = str, required = True)
+    parser.add_argument("-ff", help = "Fst file", dest = "fst_file", type = str, required = True)
+    parser.add_argument("-trans_table_out", help = "transmission table output file name", dest = "transmission_table_output_file", type = str, required = True)
+    parser.add_argument("-trans_samps_out", help = "list of transmission samples output file name", dest = "trans_samps_output_file", type = str, required = True)
+    # parser.add_argument("-pf", help = "prefix for saving files", dest = "prefix", type = str, required = True)
     parser.add_argument("-tt",help="transmission_threshold", dest="transmission_threshold", type = int, default=10)
     parser.add_argument("-ct", help="minimum cluster size", dest = "node_cutoff", type = int, default = 5)
     parser.add_argument("-bs", help = "minimum bootstrap", dest = "bootstrap_cutoff", type = int, default = 75)
@@ -177,4 +241,4 @@ def main():
 if __name__=="__main__":
 	main()
 
-#datetime.datetime(2020, 2, 13, 19, 34, 34, 740336)
+# datetime.datetime(2020, 2, 18, 14, 38, 10, 27407)
