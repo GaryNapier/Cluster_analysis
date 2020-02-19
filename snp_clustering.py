@@ -226,7 +226,7 @@ def main_get_largest_cluster(args):
 
 def main_vcf2clusters(args):
 	vcf_class = vcf(args.vcf)
-	vcf.get_clusters(cutoff=args.cutoff)
+	vcf_class.get_clusters(cutoff=args.cutoff)
 
 
 parser = argparse.ArgumentParser(
