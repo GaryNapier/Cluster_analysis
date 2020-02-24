@@ -8,7 +8,11 @@ import sys
 import subprocess
 import random
 rand_generator = random.SystemRandom()
+import statistics
 # version = 1.0
+
+# Set number of decimal places to round to
+round_place = 3
 
 def samples2itol(l):
     arr = []
@@ -144,7 +148,7 @@ class vcf:
         run_cmd("rm %s*" % tmpfile)
         return dists
 
-    def get_clusters(self, cutoff=10, remove_singletons=False):
+    def transmission_graph(self, cutoff=10, remove_singletons=False):
         dists = self.get_plink_dist()
         edges = []
         tmp_node_set = set()
@@ -173,8 +177,7 @@ class transmission_graph:
         self.graph.add_nodes_from([x["id"] for x in tmp["nodes"]])
         for edge in tmp["edges"]:
             self.graph.add_edges_from([(edge["source"], edge["target"])])
-        self.clusters = sorted(list(connected_components(
-            self.graph)), key=lambda x: len(x), reverse=True)
+        self.clusters = sorted(list(connected_components(self.graph)), key=lambda x: len(x), reverse=True)
 
     def add_meta_data(self, csvfile):
         for row in csv.DictReader(open(csvfile)):
@@ -192,12 +195,26 @@ class transmission_graph:
         print(self.clusters)
 
 
+# def main_stats(args):
+#     graph = transmission_graph(args.graph)
+#     print("Num clusters: %s" % len(graph.clusters))
+#     print("Mean clusters size: %s" %
+#           (sum([len(x) for x in graph.clusters])/len(graph.clusters)))
+
 def main_stats(args):
     graph = transmission_graph(args.graph)
-    print("Num clusters: %s" % len(graph.clusters))
-    print("Mean clusters size: %s" %
-          (sum([len(x) for x in graph.clusters])/len(graph.clusters)))
+    min_clust_size = args.cluster_minimum
+    len_clusts = []
+    for clust in graph.clusters:
+        if len(clust) >= min_clust_size:
+            len_clusts.append(len(clust))
 
+    print("N samples in clusters: %s" % sum(len_clusts))
+    print("Number of clusters: %s" % len(len_clusts))
+    print("Max clust size: %s" % max(len_clusts))
+    print("Min clust size: %s" % min(len_clusts))
+    print("Mean clusters size: %s" % round((sum(len_clusts) / len(len_clusts)), round_place) )
+    print("s.d. clusters: %s" % round(statistics.stdev(len_clusts), round_place) )
 
 def main_add_meta(args):
     graph = transmission_graph(args.graph)
@@ -241,6 +258,7 @@ parser_sub.set_defaults(func=main_vcf2clusters)
 parser_sub = subparsers.add_parser(
     'stats', help='Calculate stats', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser_sub.add_argument('graph')
+parser_sub.add_argument("--clust_min", help="minimum number of samples in cluster", dest="cluster_minimum", type=int, default=1)
 parser_sub.set_defaults(func=main_stats)
 
 
