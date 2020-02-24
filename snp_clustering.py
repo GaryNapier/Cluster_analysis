@@ -106,7 +106,8 @@ def run_cmd(cmd, verbose=1, target=None):
 
 
 class vcf:
-    def __init__(self, filename, prefix=None, threads=4):
+    # def __init__(self, filename, prefix=None, threads=4):
+    def __init__(self, filename, prefix=None, threads=4, keepfile):
         self.samples = []
         self.filename = filename
         self.threads = threads
