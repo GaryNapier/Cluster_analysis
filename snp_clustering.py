@@ -10,10 +10,14 @@ import subprocess
 import random
 rand_generator = random.SystemRandom()
 import statistics
+import subprocess as sp
 # version = 1.0
 
-# Set number of decimal places to round to
+# ----------------
+# Universal setup/variables
+# ----------------
 round_place = 3
+path_command = "find -name "
 
 def samples2itol(l):
     arr = []
@@ -208,8 +212,9 @@ class transmission_graph:
 #           (sum([len(x) for x in graph.clusters])/len(graph.clusters)))
 
 def main_stats(args):
-    filecheck(args.graph)
-    graph = transmission_graph(args.graph)
+    graph = sp.getoutput(path_command+args.graph)
+    filecheck(graph)
+    graph = transmission_graph(graph)
     min_clust_size = args.cluster_minimum
     len_clusts = []
     for clust in graph.clusters:
@@ -247,8 +252,11 @@ def main_get_largest_cluster(args):
 
 
 def main_vcf2clusters(args):
-    filecheck(args.vcf)
-    vcf_class = vcf(args.vcf,keepfile=args.keepfile)
+    vcf_file = sp.getoutput(path_command+args.vcf)
+    keepfile = sp.getoutput(path_command+args.keepfile)
+    filecheck(vcf_file)
+    filecheck(keepfile)
+    vcf_class = vcf(vcf_file,keepfile=keepfile)
     vcf_class.get_clusters(cutoff=args.cutoff)
 
 
