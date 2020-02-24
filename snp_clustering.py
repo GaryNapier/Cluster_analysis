@@ -107,10 +107,11 @@ def run_cmd(cmd, verbose=1, target=None):
 
 class vcf:
     # def __init__(self, filename, prefix=None, threads=4):
-    def __init__(self, filename, prefix=None, threads=4, keepfile):
+    def __init__(self, filename, prefix=None, threads=4, keepfile=None):
         self.samples = []
         self.filename = filename
         self.threads = threads
+        self.keepfile = keepfile
         if prefix is None:
             if filename[-4:] == ".bcf":
                 self.prefix = filename[:-4]
@@ -134,7 +135,8 @@ class vcf:
         os.remove(self.temp_file)
         self.vcf = "%s.vcf" % self.prefix
 
-    def get_plink_dist(self,keepfile=None):
+    # def get_plink_dist(self,keepfile=None):
+    def get_plink_dist(self):
         tmpfile = get_random_file()
         keep_cmd = " --keep %s " % keepfile if keepfile else  ""
         cmd = "plink --vcf %s %s --distance square --allow-extra-chr --out %s --double-id" % (    self.filename, keep_cmd, tmpfile)
