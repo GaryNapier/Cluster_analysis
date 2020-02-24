@@ -151,7 +151,7 @@ class vcf:
         run_cmd("rm %s*" % tmpfile)
         return dists
 
-    def transmission_graph(self, cutoff=10, remove_singletons=False):
+    def get_clusters(self, cutoff=10, remove_singletons=False):
         dists = self.get_plink_dist()
         edges = []
         tmp_node_set = set()
