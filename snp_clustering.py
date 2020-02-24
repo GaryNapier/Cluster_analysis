@@ -4,6 +4,7 @@ import networkx
 import argparse
 import json
 import os
+import os.path
 import sys
 import subprocess
 import random
@@ -135,6 +136,7 @@ class vcf:
         os.remove(self.temp_file)
         self.vcf = "%s.vcf" % self.prefix
 
+
     # def get_plink_dist(self,keepfile=None):
     def get_plink_dist(self):
         tmpfile = get_random_file()
@@ -206,6 +208,7 @@ class transmission_graph:
 #           (sum([len(x) for x in graph.clusters])/len(graph.clusters)))
 
 def main_stats(args):
+    filecheck(args.graph)
     graph = transmission_graph(args.graph)
     min_clust_size = args.cluster_minimum
     len_clusts = []
@@ -244,6 +247,7 @@ def main_get_largest_cluster(args):
 
 
 def main_vcf2clusters(args):
+    filecheck(args.vcf)
     vcf_class = vcf(args.vcf,keepfile=args.keepfile)
     vcf_class.get_clusters(cutoff=args.cutoff)
 
@@ -264,7 +268,6 @@ parser_sub = subparsers.add_parser(
 parser_sub.add_argument('graph')
 parser_sub.add_argument("--clust_min", help="minimum number of samples in cluster", dest="cluster_minimum", type=int, default=1)
 parser_sub.set_defaults(func=main_stats)
-
 
 parser_sub = subparsers.add_parser(
     'annotate', help='Output program version and exit', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
