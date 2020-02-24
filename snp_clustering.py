@@ -138,7 +138,8 @@ class vcf:
     # def get_plink_dist(self,keepfile=None):
     def get_plink_dist(self):
         tmpfile = get_random_file()
-        keep_cmd = " --keep %s " % keepfile if keepfile else  ""
+        # keep_cmd = " --keep %s " % keepfile if keepfile else  ""
+        keep_cmd = " --keep %s " % self.keepfile if self.keepfile else  ""
         cmd = "plink --vcf %s %s --distance square --allow-extra-chr --out %s --double-id" % (    self.filename, keep_cmd, tmpfile)
         run_cmd(cmd)
         O = open("%s.dist" % (self.prefix), "w")
