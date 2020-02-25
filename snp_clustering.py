@@ -309,7 +309,7 @@ parser_sub.set_defaults(func=main_vcf2clusters)
 parser_sub = subparsers.add_parser(
     'stats', help='Calculate stats', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser_sub.add_argument('graph')
-parser_sub.add_argument("--out", help = "output file name", type = str, dest = "stats_output_file")
+parser_sub.add_argument("--out", help = "output file name", dest = "stats_output_file", type = str)
 parser_sub.add_argument("--clust_min", help="minimum number of samples in cluster", dest="cluster_minimum", type=int, default=1)
 parser_sub.set_defaults(func=main_stats)
 
