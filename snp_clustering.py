@@ -252,7 +252,7 @@ def main_stats(args):
     print(stats_dict)
 
     # Write dictionary to file:
-	if nofile(stats_output_file):
+    if nofile(stats_output_file):
         with open(stats_output_file, 'w') as f:
 			writer = csv.DictWriter(f, fieldnames = list(stats_dict.keys()), delimiter = '\t')
 			writer.writeheader()
