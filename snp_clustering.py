@@ -216,6 +216,7 @@ def main_stats(args):
     filecheck(graph)
     graph = transmission_graph(graph)
     min_clust_size = args.cluster_minimum
+    stats_output_file = args.stats_output_file
     len_clusts = []
     for clust in graph.clusters:
         if len(clust) >= min_clust_size:
