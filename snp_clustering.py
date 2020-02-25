@@ -146,7 +146,7 @@ class vcf:
         tmpfile = get_random_file()
         # keep_cmd = " --keep %s " % keepfile if keepfile else  ""
         keep_cmd = " --keep %s " % self.keepfile if self.keepfile else  ""
-        cmd = "plink --vcf %s %s --distance square --allow-extra-chr --out %s --double-id" % (    self.filename, keep_cmd, tmpfile)
+        cmd = "plink --vcf %s %s --distance square --allow-extra-chr --out %s --double-id" % ( self.filename, keep_cmd, tmpfile)
         run_cmd(cmd)
         O = open("%s.dist" % (self.prefix), "w")
         dists = []
@@ -221,12 +221,46 @@ def main_stats(args):
         if len(clust) >= min_clust_size:
             len_clusts.append(len(clust))
 
-    print("N samples in clusters: %s" % sum(len_clusts))
-    print("Number of clusters: %s" % len(len_clusts))
-    print("Max clust size: %s" % max(len_clusts))
-    print("Min clust size: %s" % min(len_clusts))
-    print("Mean clusters size: %s" % round((sum(len_clusts) / len(len_clusts)), round_place) )
-    print("s.d. clusters: %s" % round(statistics.stdev(len_clusts), round_place) )
+    # print("N samples in clusters: %s" % sum(len_clusts))
+    # print("Number of clusters: %s" % len(len_clusts))
+    # print("Max clust size: %s" % max(len_clusts))
+    # print("Min clust size: %s" % min(len_clusts))
+    # print("Mean clusters size: %s" % round((sum(len_clusts) / len(len_clusts)), round_place) )
+    # print("s.d. clusters: %s" % round(statistics.stdev(len_clusts), round_place) )
+
+    n_samps = sum(len_clusts)
+    n_clusts = len(len_clusts)
+    max_clust_sz = max(len_clusts or [0])
+    min_clust_sz = min(len_clusts or [0])
+    try:
+        mean_clust_sz = round((sum(len_clusts) / len(len_clusts)), round_place)
+    except:
+        mean_clust_sz = 0
+
+    try:
+        sd_clust_sz = round(statistics.stdev(len_clusts), round_place)
+    except:
+        sd_clust_sz = 0
+
+    stats_dict = {"N samples in clusters": n_samps,
+    "Number of clusters": n_clusts,
+    "Max clust size": max_clust_sz,
+    "Min clust size": min_clust_sz,
+    "Mean clusters size": mean_clust_sz,
+    "s.d. clusters": sd_clust_sz}
+
+    print(stats_dict)
+
+    # Write dictionary to file:
+	if nofile(stats_output_file):
+		with open(stats_output_file, 'w') as f:
+			writer = csv.DictWriter(f, fieldnames = list(stats_dict.keys()), delimiter = '\t')
+			writer.writeheader()
+			writer.writerows([stats_dict])
+	else:
+		with open(stats_output_file, 'a+') as f:
+			writer = csv.DictWriter(f, fieldnames = list(stats_dict.keys()), delimiter = '\t')
+			writer.writerows([stats_dict])
 
 def main_add_meta(args):
     graph = transmission_graph(args.graph)
@@ -274,6 +308,7 @@ parser_sub.set_defaults(func=main_vcf2clusters)
 parser_sub = subparsers.add_parser(
     'stats', help='Calculate stats', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser_sub.add_argument('graph')
+parser_sub.add_argument("--out", help = "output file name", type = str, dest = "stats_output_file")
 parser_sub.add_argument("--clust_min", help="minimum number of samples in cluster", dest="cluster_minimum", type=int, default=1)
 parser_sub.set_defaults(func=main_stats)
 
