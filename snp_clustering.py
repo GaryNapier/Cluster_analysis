@@ -254,10 +254,10 @@ def main_stats(args):
     # Write dictionary to file:
     if nofile(stats_output_file):
         with open(stats_output_file, 'w') as f:
-			writer = csv.DictWriter(f, fieldnames = list(stats_dict.keys()), delimiter = '\t')
-			writer.writeheader()
-			writer.writerows([stats_dict])
-	else:
+            writer = csv.DictWriter(f, fieldnames = list(stats_dict.keys()), delimiter = '\t')
+            writer.writeheader()
+            writer.writerows([stats_dict])
+        else:
         with open(stats_output_file, 'a+') as f:
             writer = csv.DictWriter(f, fieldnames = list(stats_dict.keys()), delimiter = '\t')
             writer.writerows([stats_dict])
