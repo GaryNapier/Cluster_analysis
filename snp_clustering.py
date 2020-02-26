@@ -39,8 +39,8 @@ DATA
             arr.append("%s\tblack" % x.rstrip())
         return "\n".join(arr)
     else:
+        arr.append("\n")
         for x in l:
-            arr.append("\n")
             arr.append("%s\tblack" % x.rstrip())
         return "\n".join(arr)
 
