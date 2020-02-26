@@ -40,6 +40,7 @@ DATA
         return "\n".join(arr)
     else:
         for x in l:
+            arr.append("\n")
             arr.append("%s\tblack" % x.rstrip())
         return "\n".join(arr)
 
