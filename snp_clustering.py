@@ -181,7 +181,7 @@ class vcf:
         nodes = [{"id": s} for s in tmp_node_set] if remove_singletons else [
             {"id": s} for s in self.samples]
         graph = {"nodes": nodes, "edges": edges}
-        json.dump(graph, open("%s.ters.json" % self.prefix, "w"))
+        json.dump(graph, open("%s.distance_clusters.json" % self.prefix, "w"))
         return graph
 
 
