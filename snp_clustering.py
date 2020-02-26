@@ -212,7 +212,8 @@ class transmission_graph:
 #           (sum([len(x) for x in graph.clusters])/len(graph.clusters)))
 
 def main_stats(args):
-    graph = sp.getoutput(path_command+args.graph)
+    # graph = sp.getoutput(path_command+args.graph)
+    graph = args.graph
     filecheck(graph)
     graph = transmission_graph(graph)
     min_clust_size = args.cluster_minimum
@@ -287,8 +288,10 @@ def main_get_largest_cluster(args):
 
 
 def main_vcf2clusters(args):
-    vcf_file = sp.getoutput(path_command+args.vcf)
-    keepfile = sp.getoutput(path_command+args.keepfile)
+    # vcf_file = sp.getoutput(path_command+args.vcf)
+    # keepfile = sp.getoutput(path_command+args.keepfile)
+    vcf_file = args.vcf
+    keepfile = args.keepfile
     filecheck(vcf_file)
     filecheck(keepfile)
     vcf_class = vcf(vcf_file,keepfile=keepfile)
