@@ -269,7 +269,7 @@ def main_stats(args):
             if nofile(itol_file):
                 open(itol_file,"w").write(samples2itol(list(cluster)))
             else:
-                open(itol_file,"a+").write(samples2itol(list(cluster)))
+                open(itol_file,"a+").write(samples2itol(list(cluster), append_samps_only=True))
 
 def main_add_meta(args):
     graph = transmission_graph(args.graph)
