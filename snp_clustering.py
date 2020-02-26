@@ -19,7 +19,7 @@ import subprocess as sp
 round_place = 3
 path_command = "find -name "
 
-def samples2itol(l):
+def samples2itol(l, append_samps_only=False):
     arr = []
     text = """DATASET_COLORSTRIP
 SEPARATOR TAB
@@ -33,10 +33,16 @@ LEGEND_LABELS    Sample
 
 DATA
 """
-    arr.append(text)
-    for x in l:
-        arr.append("%s\tblack" % x.rstrip())
-    return "\n".join(arr)
+    if append_samps_only is False:
+        arr.append(text)
+        for x in l:
+            arr.append("%s\tblack" % x.rstrip())
+        return "\n".join(arr)
+    else:
+        for x in l:
+            arr.append("%s\tblack" % x.rstrip())
+        return "\n".join(arr)
+
 
 def get_random_file(prefix=None, extension=None):
     randint = rand_generator.randint(1, 999999)
@@ -257,15 +263,13 @@ def main_stats(args):
             writer.writerows([stats_dict])
 
     # Save samples to itol file
-    itol_file = f"{args.graph}.cluster.itol.txt"
+    itol_file = args.itol_file
     for cluster in graph.clusters:
         if len(cluster)>=min_clust_size:
             if nofile(itol_file):
-                open(f"{args.graph}.cluster.itol.txt","w").write(samples2itol(list(cluster)))
+                open(itol_file,"w").write(samples2itol(list(cluster)))
             else:
-                open(f"{args.graph}.cluster.itol.txt","a+").write(list(cluster))
-
-
+                open(itol_file,"a+").write(samples2itol(list(cluster)))
 
 def main_add_meta(args):
     graph = transmission_graph(args.graph)
@@ -316,6 +320,7 @@ parser_sub = subparsers.add_parser(
     'stats', help='Calculate stats', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser_sub.add_argument('graph')
 parser_sub.add_argument("--out", help = "output file name", dest = "stats_output_file", type = str)
+parser_sub.add_argument("--itol_file", help = "name of itol file output", dest = "itol_file", type = str)
 parser_sub.add_argument("--clust_min", help="minimum number of samples in cluster", dest="cluster_minimum", type=int, default=1)
 parser_sub.set_defaults(func=main_stats)
 
