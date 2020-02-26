@@ -111,7 +111,6 @@ def run_cmd(cmd, verbose=1, target=None):
 
 
 class vcf:
-    # def __init__(self, filename, prefix=None, threads=4):
     def __init__(self, filename, prefix=None, threads=4, keepfile=None):
         self.samples = []
         self.filename = filename
@@ -141,7 +140,6 @@ class vcf:
         self.vcf = "%s.vcf" % self.prefix
 
 
-    # def get_plink_dist(self,keepfile=None):
     def get_plink_dist(self):
         tmpfile = get_random_file()
         # keep_cmd = " --keep %s " % keepfile if keepfile else  ""
@@ -175,7 +173,7 @@ class vcf:
         nodes = [{"id": s} for s in tmp_node_set] if remove_singletons else [
             {"id": s} for s in self.samples]
         graph = {"nodes": nodes, "edges": edges}
-        json.dump(graph, open("%s.distance_clusters.json" % self.prefix, "w"))
+        json.dump(graph, open("%s.ters.json" % self.prefix, "w"))
         return graph
 
 
@@ -212,7 +210,6 @@ class transmission_graph:
 #           (sum([len(x) for x in graph.clusters])/len(graph.clusters)))
 
 def main_stats(args):
-    # graph = sp.getoutput(path_command+args.graph)
     graph = args.graph
     filecheck(graph)
     graph = transmission_graph(graph)
@@ -223,13 +220,7 @@ def main_stats(args):
         if len(clust) >= min_clust_size:
             len_clusts.append(len(clust))
 
-    # print("N samples in clusters: %s" % sum(len_clusts))
-    # print("Number of clusters: %s" % len(len_clusts))
-    # print("Max clust size: %s" % max(len_clusts))
-    # print("Min clust size: %s" % min(len_clusts))
-    # print("Mean clusters size: %s" % round((sum(len_clusts) / len(len_clusts)), round_place) )
-    # print("s.d. clusters: %s" % round(statistics.stdev(len_clusts), round_place) )
-
+    # Save and tidy variables. Max and stdev are fussy so use try/except
     n_samps = sum(len_clusts)
     n_clusts = len(len_clusts)
     max_clust_sz = max(len_clusts or [0])
@@ -244,6 +235,7 @@ def main_stats(args):
     except:
         sd_clust_sz = 0
 
+    # Put in dictionary
     stats_dict = {"N samples in clusters": n_samps,
     "Number of clusters": n_clusts,
     "Max clust size": max_clust_sz,
@@ -263,6 +255,17 @@ def main_stats(args):
         with open(stats_output_file, 'a+') as f:
             writer = csv.DictWriter(f, fieldnames = list(stats_dict.keys()), delimiter = '\t')
             writer.writerows([stats_dict])
+
+    # Save samples to itol file
+    itol_file = f"{args.graph}.cluster.itol.txt"
+    for cluster in graph.clusters:
+        if len(cluster)>=min_clust_size:
+            if nofile(itol_file):
+                open(f"{args.graph}.cluster.itol.txt","w").write(samples2itol(list(cluster)))
+            else:
+                open(f"{args.graph}.cluster.itol.txt","a+").write(list(cluster))
+
+
 
 def main_add_meta(args):
     graph = transmission_graph(args.graph)
