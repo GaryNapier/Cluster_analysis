@@ -264,31 +264,31 @@ def main_stats(args):
             writer = csv.DictWriter(f, fieldnames = list(stats_dict.keys()), delimiter = '\t')
             writer.writerows([stats_dict])
 
-    # Save samples to file:
+    # # Save samples to file:
+    #
+    # # Get samples from graph and clean
+    # samps_in_clusters = []
+    # for clust in graph.clusters:
+    #     if len(clust) >= min_clust_size:
+    #         samps_in_clusters.append(list(clust))
+    #
+    # # Unlist lists in list
+    # samps_in_clusters = [item for sublist in samps_in_clusters for item in sublist]
+    #
+    # # Put samples in file. Create if not exist or append
+    # samps_file = args.samps_file
+    # if nofile(samps_file):
+    #     with open(samps_file, 'w') as f:
+    #         for samp in samps_in_clusters:
+    #             f.write(samp+"\n")
+    # else:
+    #     with open(samps_file, 'a+') as f:
+    #         for samp in samps_in_clusters:
+    #             f.write(samp+"\n")
 
-    # Get samples from graph and clean
-    samps_in_clusters = []
-    for clust in graph.clusters:
-        if len(clust) >= min_clust_size:
-            samps_in_clusters.append(list(clust))
-
-    # Unlist lists in list
-    samps_in_clusters = [item for sublist in samps_in_clusters for item in sublist]
-
-    # Put samples in file. Create if not exist or append
-    samps_file = args.samps_file
-    if nofile(samps_file):
-        with open(samps_file, 'w') as f:
-            for samp in samps_in_clusters:
-                f.write(samp+"\n")
-    else:
-        with open(samps_file, 'a+') as f:
-            for samp in samps_in_clusters:
-                f.write(samp+"\n")
-
-    # Get unique & save
-    temp_file = "samps_temp_file.txt"
-    run_cmd("sort %s | uniq > %s && mv %s %s" % (samps_file, temp_file, temp_file, samps_file))
+    # # Get unique & save
+    # temp_file = "samps_temp_file.txt"
+    # run_cmd("sort %s | uniq > %s && mv %s %s" % (samps_file, temp_file, temp_file, samps_file))
 
 
 def main_add_meta(args):
