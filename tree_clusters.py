@@ -273,11 +273,15 @@ def run(args):
 	lineage_vect = []
 	clust_num_vect = []
 	node_dist_vect = []
+	mean_descendants_vect = []
+	branch_diff_vect =[]
+	branch_ratio_vect = []
 	t_test_stat_vect = []
 	p_val_vect = []
 	mwu_stat_vect = []
 	mwu_p_vect = []
 	es_vect = []
+	mwu_es_vect = []
 	n_vect = []
 	n_dist_vect = []
 	min_win_vect = []
@@ -317,19 +321,13 @@ def run(args):
 
 		# Do t-tests
 		if do_t_test == 1:
+
+			# Distance stat tests
 			t_test = stats.ttest_ind(subdist_within_lt, subdist_btwn, equal_var=False)
-			# print("-----------")
-			# print("t-test:  stat=%.3f, p=%.3f " % (round(t_test[0], round_place), round(t_test.pvalue, round_place)))
-
 			mwu_stat, mwu_p = mannwhitneyu(subdist_within_lt, subdist_btwn)
-			# print("-----------")
-			# print('Mann-Whitney U: stat=%.3f, p=%.3f' % (mwu_stat, mwu_p))
-
 			effect_sz = round(cohend(subdist_within_lt, subdist_btwn), round_place)
 
 			if t_test.pvalue <= 0.05:
-
-
 			# if mwu_p <= 0.05:
 				lineage_vect.append(lineage)
 				clust_num += 1
@@ -340,12 +338,13 @@ def run(args):
 					p_val_vect.append(round(math.log10(sys.float_info.min), round_place))
 				else:
 					p_val_vect.append(round(math.log10(t_test[1]), round_place))
+				es_vect.append(effect_sz)
 				mwu_stat_vect.append(round(mwu_stat, round_place))
 				# mwu_p_vect.append(round(mwu_p, round_place))
 				if mwu_p == 0:
 					mwu_p = sys.float_info.min
 				mwu_p_vect.append(round(math.log10(mwu_p), round_place))
-				es_vect.append(effect_sz)
+				mwu_es_vect.append(mwu_stat/(len(subdist_within_lt)*len(subdist_btwn))) # Non-parametric effect size
 				n_vect.append(round(len(leaf_list), round_place))
 				n_dist_vect.append(round(len(subdist_within_lt), round_place))
 				min_win_vect.append(round(np.min(subdist_within_lt), round_place))
@@ -361,7 +360,18 @@ def run(args):
 				diff_vect.append(round(abs(np.sum(subdist_within_lt) - np.sum(subdist_btwn)), round_place))
 				# ratio_vect.append(round(abs(np.sum(subdist_within_lt) / np.sum(subdist_btwn)), round_place))
 				med_diff_vect.append(round(abs(np.median(subdist_within_lt) - np.median(subdist_btwn)), round_place))
-				med_ratio_vect.append(round(np.median(subdist_within_lt) / np.median(subdist_btwn), round_place))
+				med_ratio_vect.append(round(np.median(subdist_btwn) / np.median(subdist_within_lt), round_place))
+
+				# Branch length tests - test if length of branch defining clade is different from mean length of children
+				descendents = node.get_descendants()
+				desc_dist_vect = []
+				for desc in descendents:
+					desc_dist_vect.append(desc.dist)
+				np.mean(desc_dist_vect)
+				mean_descendants = np.mean(desc_dist_vect)
+				mean_descendants_vect.append(mean_descendants)
+				branch_diff_vect.append(node.dist - mean_descendants)
+				branch_ratio_vect.append(round((node.dist/mean_descendants), round_place))
 
 				if get_outlers:
 					# Get outliers
@@ -470,9 +480,12 @@ def run(args):
 	print("--------------------------------------")
 
 	# Collate and print stats
-	stats_dict = {"lineage": lineage_vect, "clust_num":clust_num_vect, "n":n_vect, "n_dist":n_dist_vect, "node_dist":node_dist_vect, "t_test_stat":t_test_stat_vect, "t_test_p":p_val_vect, \
-	"mwu_stat": mwu_stat_vect, "mwu_p": mwu_p_vect, "effect_size":es_vect,  "min_w/in":min_win_vect, "max_w/in":max_win_vect, \
-	 "sum_w/in":sum_win_vect, "mean_sd_w/in": mean_win_vect, "median_mad_w/in":med_win_vect,  "min_btwn":min_btwn_vect, \
+	stats_dict = {"lineage": lineage_vect, "clust_num":clust_num_vect, "n":n_vect, "n_dist":n_dist_vect, \
+	"node_branch_length":node_dist_vect, "mean_descendants_branch_lengths": mean_descendants_vect, "branch_diffs": branch_diff_vect, "branch_ratio": branch_ratio_vect, \
+	 "t_test_stat":t_test_stat_vect, "t_test_p":p_val_vect, "cohen_d_effect_size": es_vect, \
+	 "mwu_stat": mwu_stat_vect, "mwu_p": mwu_p_vect, "mwu_effect_size": mwu_es_vect, \
+	 "min_w/in":min_win_vect, "max_w/in":max_win_vect, \
+	 "sum_w/in":sum_win_vect, "mean_(sd)_w/in": mean_win_vect, "median_(mad)_w/in":med_win_vect,  "min_btwn":min_btwn_vect, \
 	 "max_btwn":max_btwn_vect, "sum_btwn":sum_btwn_vect, "mean_sd_btwn":mean_btwn_vect, "median_mad_btwn":med_btwn_vect, "med_diff": med_diff_vect, \
 	 "med_ratio": med_ratio_vect}
 
@@ -487,6 +500,7 @@ def run(args):
 		print(stats_df.iloc[clust_nums, ])
 	# print(stats_df)
 	print("---------------------------------------------")
+	print(mwu_es_vect)
 
 def main():
 	parser=argparse.ArgumentParser(description="Find tree clusters")
