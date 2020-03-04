@@ -13,6 +13,7 @@ import sys
 from numpy import mean
 from scipy import stats
 from numpy import var
+import math
 from math import sqrt
 import seaborn as sns
 import matplotlib.pyplot as plt
@@ -22,6 +23,8 @@ from itertools import chain
 import scipy
 from scipy.stats import iqr
 from matplotlib.backends.backend_pdf import PdfPages
+from scipy.stats import mannwhitneyu
+
 
 def run_cmd(cmd,verbose=1,target=None):
 	"""
@@ -189,11 +192,6 @@ def cohend(d1, d2):
 
 def run(args):
 	lineage = args.input # these match the "dest": dest="input"
-	# tree_file = "lin_%s/results/lin_%s.iqtree.treefile" % (lineage, lineage)
-	# tree_file = "lin_{0}/results/lin_{0}.iqtree.treefile".format(lineage) # % (lineage, lineage)
-	# mds_file = "lin_%s/results/lin_%s_results.filt.pca.mds" % (lineage, lineage)
-	# dist_file = "lin_%s/results/lin_%s_results.filt.dist" % (lineage, lineage)
-
 	tree_file = args.tree_file
 	mds_file = args.mds_file
 	dist_file = args.dist_file
@@ -210,12 +208,14 @@ def run(args):
 	if metadata == "":
 		do_clustering_analysis = 0
 	get_outlers = args.get_outlers
-	clust_nums = args.clust_nums.split(",")
-
-	clust_nums = [int(i) for i in clust_nums]
-	clust_nums = [x-1 for x in clust_nums] # Pathetic python indexing - have to subtract 1
+	clust_nums = args.clust_nums
+	if clust_nums is not None:
+		clust_nums = clust_nums.split(",")
+		clust_nums = [int(i) for i in clust_nums]
+		clust_nums = [x-1 for x in clust_nums] # Pathetic python indexing - have to subtract 1
+	print("-------------clust_nums---------------")
 	print(clust_nums)
-
+	print("--------------------------------------")
 
 	off_diag = -1 # Have to specify off-diagonal with '-1'.
 
@@ -267,12 +267,16 @@ def run(args):
 	colours = sns.hls_palette(len(sublins), l = 0.9, s = 0.7).as_hex()
 	bxplt_file = "lin_%s/results/lin_%s_boxplots.pdf" % (lineage, lineage) # Set up boxplots file
 	pdf = PdfPages(bxplt_file) # Set up to save as pdf
-	round_place = 2
+	round_place = 3
 
 	# Set up table for tree traverse loop
+	lineage_vect = []
 	clust_num_vect = []
+	node_dist_vect = []
 	t_test_stat_vect = []
 	p_val_vect = []
+	mwu_stat_vect = []
+	mwu_p_vect = []
 	es_vect = []
 	n_vect = []
 	n_dist_vect = []
@@ -287,6 +291,8 @@ def run(args):
 	mean_btwn_vect = []
 	med_btwn_vect = []
 	diff_vect = []
+	med_diff_vect = []
+	med_ratio_vect = []
 
 	# Traverse tree loop
 	for node in t.traverse("preorder"):
@@ -312,13 +318,33 @@ def run(args):
 		# Do t-tests
 		if do_t_test == 1:
 			t_test = stats.ttest_ind(subdist_within_lt, subdist_btwn, equal_var=False)
+			# print("-----------")
+			# print("t-test:  stat=%.3f, p=%.3f " % (round(t_test[0], round_place), round(t_test.pvalue, round_place)))
+
+			mwu_stat, mwu_p = mannwhitneyu(subdist_within_lt, subdist_btwn)
+			# print("-----------")
+			# print('Mann-Whitney U: stat=%.3f, p=%.3f' % (mwu_stat, mwu_p))
+
 			effect_sz = round(cohend(subdist_within_lt, subdist_btwn), round_place)
 
 			if t_test.pvalue <= 0.05:
+
+
+			# if mwu_p <= 0.05:
+				lineage_vect.append(lineage)
 				clust_num += 1
 				clust_num_vect.append(clust_num)
+				node_dist_vect.append(node.dist)
 				t_test_stat_vect.append(round(t_test[0], round_place))
-				p_val_vect.append(round(t_test[1], round_place))
+				if t_test[1] == 0: # Convert p-val to lowest possible number for log10 conversion if 0
+					p_val_vect.append(round(math.log10(sys.float_info.min), round_place))
+				else:
+					p_val_vect.append(round(math.log10(t_test[1]), round_place))
+				mwu_stat_vect.append(round(mwu_stat, round_place))
+				# mwu_p_vect.append(round(mwu_p, round_place))
+				if mwu_p == 0:
+					mwu_p = sys.float_info.min
+				mwu_p_vect.append(round(math.log10(mwu_p), round_place))
 				es_vect.append(effect_sz)
 				n_vect.append(round(len(leaf_list), round_place))
 				n_dist_vect.append(round(len(subdist_within_lt), round_place))
@@ -333,6 +359,9 @@ def run(args):
 				mean_btwn_vect.append(str(round(np.mean(subdist_btwn), round_place)) + " (" + str(round(np.std(subdist_btwn, ddof=1), round_place)) + ")")
 				med_btwn_vect.append(str(round(np.median(subdist_btwn), round_place)) + " (" + str(round(robust.mad(subdist_btwn), round_place)) + ")")
 				diff_vect.append(round(abs(np.sum(subdist_within_lt) - np.sum(subdist_btwn)), round_place))
+				# ratio_vect.append(round(abs(np.sum(subdist_within_lt) / np.sum(subdist_btwn)), round_place))
+				med_diff_vect.append(round(abs(np.median(subdist_within_lt) - np.median(subdist_btwn)), round_place))
+				med_ratio_vect.append(round(np.median(subdist_within_lt) / np.median(subdist_btwn), round_place))
 
 				if get_outlers:
 					# Get outliers
@@ -435,21 +464,29 @@ def run(args):
 		nst["bgcolor"] = colours[i]
 		t.get_common_ancestor(list(samps_sublin)).set_style(nst)
 
-	print("---------------------------")
+	print("-------------Newick file--------------")
 	print(t.write(features=[])) # Print Newick file
-	t.show(tree_style=ts)
+	# t.show(tree_style=ts)
+	print("--------------------------------------")
 
 	# Collate and print stats
-	stats_dict = {"clust_num":clust_num_vect, "n":n_vect, "n_dist":n_dist_vect, "t_test_stat":t_test_stat_vect, "p":p_val_vect, "effect_size":es_vect,  \
-		 "min_w/in":min_win_vect, "max_w/in":max_win_vect, "sum_w/in":sum_win_vect, "mean_sd_w/in":mean_win_vect, "median_mad_w/in":med_win_vect, \
-		 "min_btwn":min_btwn_vect, "max_btwn":max_btwn_vect, "sum_btwn":sum_btwn_vect, "mean_sd_btwn":mean_btwn_vect, "median_mad_btwn":med_btwn_vect, "diff":diff_vect}
+	stats_dict = {"lineage": lineage_vect, "clust_num":clust_num_vect, "n":n_vect, "n_dist":n_dist_vect, "node_dist":node_dist_vect, "t_test_stat":t_test_stat_vect, "t_test_p":p_val_vect, \
+	"mwu_stat": mwu_stat_vect, "mwu_p": mwu_p_vect, "effect_size":es_vect,  "min_w/in":min_win_vect, "max_w/in":max_win_vect, \
+	 "sum_w/in":sum_win_vect, "mean_sd_w/in": mean_win_vect, "median_mad_w/in":med_win_vect,  "min_btwn":min_btwn_vect, \
+	 "max_btwn":max_btwn_vect, "sum_btwn":sum_btwn_vect, "mean_sd_btwn":mean_btwn_vect, "median_mad_btwn":med_btwn_vect, "med_diff": med_diff_vect, \
+	 "med_ratio": med_ratio_vect}
+
 	stats_df = pd.DataFrame(stats_dict)
 	pd.set_option('display.max_rows', 1000) # print all out
 	stats_df.index = stats_df.index + 1 # Python indexing again...
-	if clust_nums == 1:
+	print("------------------stats_df-------------------")
+	# if clust_nums[0] == 1 and len(clust_nums) == 1:
+	if clust_nums is None:
 		print(stats_df)
 	else:
 		print(stats_df.iloc[clust_nums, ])
+	# print(stats_df)
+	print("---------------------------------------------")
 
 def main():
 	parser=argparse.ArgumentParser(description="Find tree clusters")
@@ -459,7 +496,7 @@ def main():
 	parser.add_argument("-tf",help="Tree file", dest="tree_file", type = str, required=True)
 	parser.add_argument("-mf",help="pca mds file", dest="mds_file", type=str, required=True)
 	parser.add_argument("-df", help = "Distance matrix file", dest="dist_file", type=str, required=True)
-	parser.add_argument("-n", help="Which cluster numbers interested in? Comma-separated with no spaces e.g. 1,2,3", dest="clust_nums", type=str, default="1")
+	parser.add_argument("-n", help="Which cluster numbers interested in? Comma-separated with no spaces e.g. 1,2,3", dest="clust_nums", type=str, default=None)
 	parser.add_argument("-s",help="Min number of samples in clusters" ,dest="node_cutoff", type=int, default=20)
 	parser.add_argument("-b",help="Min bootstrap for clusters" ,dest="bootstrap_cutoff", type=int, default=51)
 	parser.add_argument("-r",help="R value cutoff (-1<0<1) for anosim", dest="test_stat", type=float, default=0.5)
