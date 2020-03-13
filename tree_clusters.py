@@ -200,6 +200,11 @@ def cohend(d1, d2):
     # calculate the effect size
     return (u1 - u2) / s
 
+def cohend_one_samp(d1, mu):
+    u1 = mean(d1)
+    sd = np.std(d1, ddof=1)
+    return (u1 - mu) / sd
+
 
 def run(args):
     lineage = args.input  # these match the "dest": dest="input"
@@ -282,36 +287,53 @@ def run(args):
     pdf = PdfPages(bxplt_file)  # Set up to save as pdf
     round_place = 3
 
-    # Set up table for tree traverse loop
+    # Set up vectors of stats for tree traverse loop
+
+    # - basic stats -
     lineage_vect = []
     clust_num_vect = []
+    n_vect = []
+    n_dist_vect = []
+    bootstrap_vect = []
+    # -- branch stats --
     node_dist_vect = []
     mean_descendants_vect = []
     branch_diff_vect = []
     branch_ratio_vect = []
-    branch_test_p_vect = []
     branch_test_stat_vect = []
-    t_test_stat_vect = []
-    p_val_vect = []
-    mwu_stat_vect = []
-    mwu_p_vect = []
-    es_vect = []
-    mwu_es_vect = []
-    n_vect = []
-    n_dist_vect = []
+    branch_test_p_vect = []
+    branch_log10_p_vect = []
+    branch_cohen_d_vect = []
+    branch_wilcox_stat_vect = []
+    branch_wilcox_p_vect = []
+    branch_wilcox_log10_p_vect = []
+    # -- dist stats --
     min_win_vect = []
     max_win_vect = []
     sum_win_vect = []
     mean_win_vect = []
+    sd_win_vect = []
     med_win_vect = []
+    mad_win_vect = []
     min_btwn_vect = []
     max_btwn_vect = []
     sum_btwn_vect = []
     mean_btwn_vect = []
+    sd_btwn_vect = []
     med_btwn_vect = []
-    diff_vect = []
+    mad_btwn_vect = []
     med_diff_vect = []
     med_ratio_vect = []
+    diff_vect = []
+    # -- dist stats tests --
+    t_test_stat_vect = []
+    p_val_vect = []
+    log10_pval_vect = []
+    es_vect = []
+    mwu_stat_vect = []
+    mwu_p_vect = []
+    mwu_log10_p_vect = []
+    mwu_inv_log10_es_vect = []
 
     # Traverse tree loop
     for node in t.traverse("preorder"):
@@ -346,60 +368,78 @@ def run(args):
 
             if t_test.pvalue <= 0.05:
                 # if mwu_p <= 0.05:
+                # -- basic stats --
                 lineage_vect.append(lineage)
                 clust_num += 1
                 clust_num_vect.append(clust_num)
-                node_dist_vect.append(node.dist)
-                t_test_stat_vect.append(round(t_test[0], round_place))
-                if t_test[1] == 0:  # Convert p-val to lowest possible number for log10 conversion if 0
-                    p_val_vect.append(round(math.log10(sys.float_info.min), round_place))
-                else:
-                    p_val_vect.append(round(math.log10(t_test[1]), round_place))
-                es_vect.append(effect_sz)
-                mwu_stat_vect.append(round(mwu_stat, round_place))
-                # mwu_p_vect.append(round(mwu_p, round_place))
-                if mwu_p == 0:
-                    mwu_p = sys.float_info.min
-                mwu_p_vect.append(round(math.log10(mwu_p), round_place))
-                # Non-parametric effect size
-                mwu_es_vect.append(mwu_stat/(len(subdist_within_lt)*len(subdist_btwn)))
                 n_vect.append(round(len(leaf_list), round_place))
                 n_dist_vect.append(round(len(subdist_within_lt), round_place))
-                min_win_vect.append(round(np.min(subdist_within_lt), round_place))
-                max_win_vect.append(round(np.max(subdist_within_lt), round_place))
-                sum_win_vect.append(round(np.sum(subdist_within_lt), round_place))
-                mean_win_vect.append(str(round(np.mean(subdist_within_lt), round_place)) +
-                                     " (" + str(round(np.std(subdist_within_lt, ddof=1), round_place)) + ")")
-                med_win_vect.append(str(round(np.median(subdist_within_lt), round_place)) +
-                                    " (" + str(round(robust.mad(subdist_within_lt), round_place)) + ")")
-                min_btwn_vect.append(round(np.min(subdist_btwn), round_place))
-                max_btwn_vect.append(round(np.max(subdist_btwn), round_place))
-                sum_btwn_vect.append(round(np.sum(subdist_btwn), round_place))
-                mean_btwn_vect.append(str(round(np.mean(subdist_btwn), round_place)) +
-                                      " (" + str(round(np.std(subdist_btwn, ddof=1), round_place)) + ")")
-                med_btwn_vect.append(str(round(np.median(subdist_btwn), round_place)) +
-                                     " (" + str(round(robust.mad(subdist_btwn), round_place)) + ")")
-                diff_vect.append(
-                    round(abs(np.sum(subdist_within_lt) - np.sum(subdist_btwn)), round_place))
-                # ratio_vect.append(round(abs(np.sum(subdist_within_lt) / np.sum(subdist_btwn)), round_place))
-                med_diff_vect.append(
-                    round(abs(np.median(subdist_within_lt) - np.median(subdist_btwn)), round_place))
-                med_ratio_vect.append(round(np.median(subdist_btwn) /
-                                            np.median(subdist_within_lt), round_place))
+                bootstrap_vect.append(node.support)
 
-                # Branch length tests - test if length of branch defining clade is different from mean length of children
+                # -- branch stats -- test if length of branch defining clade is different from mean length of children
+                node_dist_vect.append(node.dist)
                 descendents = node.get_descendants()
                 desc_dist_vect = []
                 for desc in descendents:
                     desc_dist_vect.append(desc.dist)
-                np.mean(desc_dist_vect)
-                mean_descendants = np.mean(desc_dist_vect)
-                mean_descendants_vect.append(mean_descendants)
-                branch_diff_vect.append(node.dist - mean_descendants)
-                branch_ratio_vect.append(round((node.dist/mean_descendants), round_place))
+                mean_descendants_vect.append(np.mean(desc_dist_vect))
+                branch_diff_vect.append(node.dist - np.mean(desc_dist_vect))
+                branch_ratio_vect.append(round((node.dist/np.mean(desc_dist_vect)), round_place))
                 branch_test = stats.ttest_1samp(desc_dist_vect, node.dist)
-                branch_test_p_vect.append(branch_test.pvalue)
+                if branch_test.pvalue == 0:
+                    branch_test_p = sys.float_info.min
+                else:
+                    branch_test_p = branch_test.pvalue
                 branch_test_stat_vect.append(branch_test.statistic)
+                branch_test_p_vect.append(branch_test_p)
+                branch_log10_p_vect.append(math.log10(branch_test_p))
+                branch_cohen_d_vect.append(cohend_one_samp(desc_dist_vect, node.dist))
+                branch_test_wilcoxon = stats.wilcoxon(desc_dist_vect - np.array(node.dist))
+                if branch_test_wilcoxon.pvalue == 0:
+                    branch_test_wilcoxon_p = sys.float_info.min
+                else:
+                    branch_test_wilcoxon_p = branch_test_wilcoxon.pvalue
+                branch_wilcox_stat_vect.append(branch_test_wilcoxon.statistic)
+                branch_wilcox_p_vect.append(branch_test_wilcoxon_p)
+                branch_wilcox_log10_p_vect.append(math.log10(branch_test_wilcoxon_p))
+
+                # -- distance stats --
+                min_win_vect.append(round(np.min(subdist_within_lt), round_place))
+                max_win_vect.append(round(np.max(subdist_within_lt), round_place))
+                sum_win_vect.append(round(np.sum(subdist_within_lt), round_place))
+                mean_win_vect.append(round(np.mean(subdist_within_lt), round_place))
+                sd_win_vect.append(round(np.std(subdist_within_lt, ddof=1), round_place))
+                med_win_vect.append(round(np.median(subdist_within_lt), round_place))
+                mad_win_vect.append(round(robust.mad(subdist_within_lt), round_place))
+                min_btwn_vect.append(round(np.min(subdist_btwn), round_place))
+                max_btwn_vect.append(round(np.max(subdist_btwn), round_place))
+                sum_btwn_vect.append(round(np.sum(subdist_btwn), round_place))
+                mean_btwn_vect.append(round(np.mean(subdist_btwn), round_place))
+                sd_btwn_vect.append(round(np.std(subdist_btwn, ddof=1), round_place))
+                med_btwn_vect.append(round(np.median(subdist_btwn), round_place))
+                mad_btwn_vect.append(round(robust.mad(subdist_btwn), round_place))
+                med_diff_vect.append(round((np.median(subdist_within_lt) - np.median(subdist_btwn)), round_place))
+                med_ratio_vect.append(round(np.median(subdist_btwn) / np.median(subdist_within_lt), round_place))
+                diff_vect.append(round(abs(np.sum(subdist_within_lt) - np.sum(subdist_btwn)), round_place))
+
+                # -- dist stats tests --
+                t_test_stat_vect.append(round(t_test[0], round_place))
+                if t_test[1] == 0:  # Convert p-val to lowest possible number for log10 conversion if 0
+                    p_val_vect.append(sys.float_info.min)
+                    log10_pval_vect.append(round(math.log10(sys.float_info.min), round_place))
+                else:
+                    p_val_vect.append(t_test[1])
+                    log10_pval_vect.append(round(math.log10(t_test[1]), round_place))
+                es_vect.append(effect_sz)
+                mwu_stat_vect.append(round(mwu_stat, round_place))
+                if mwu_stat == 0:
+                    mwu_stat = sys.float_info.min
+                if mwu_p == 0:
+                    mwu_p = sys.float_info.min
+                mwu_p_vect.append(mwu_p)
+                mwu_log10_p_vect.append(round(math.log10(mwu_p), round_place))
+                # Non-parametric effect size
+                mwu_inv_log10_es_vect.append(math.log10(1/(mwu_stat/(len(subdist_within_lt)*len(subdist_btwn)))))
 
             if get_outlers:
                 # Get outliers
@@ -513,15 +553,61 @@ def run(args):
     print("--------------------------------------")
 
     # Collate and print stats
-    stats_dict = {"lineage": lineage_vect, "clust_num": clust_num_vect, "n": n_vect, "n_dist": n_dist_vect,
-                  "node_branch_length": node_dist_vect, "mean_descendants_branch_lengths": mean_descendants_vect, "branch_diffs": branch_diff_vect, "branch_ratio": branch_ratio_vect,
-                  "branch_p_val": branch_test_p_vect, "branch_test_stat": branch_test_stat_vect,
-                  "t_test_stat": t_test_stat_vect, "t_test_p": p_val_vect, "cohen_d_effect_size": es_vect,
-                  "mwu_stat": mwu_stat_vect, "mwu_p": mwu_p_vect, "mwu_effect_size": mwu_es_vect,
-                  "min_w/in": min_win_vect, "max_w/in": max_win_vect,
-                  "sum_w/in": sum_win_vect, "mean_(sd)_w/in": mean_win_vect, "median_(mad)_w/in": med_win_vect,  "min_btwn": min_btwn_vect,
-                  "max_btwn": max_btwn_vect, "sum_btwn": sum_btwn_vect, "mean_sd_btwn": mean_btwn_vect, "median_mad_btwn": med_btwn_vect, "med_diff": med_diff_vect,
-                  "med_ratio": med_ratio_vect}
+    # stats_dict = {"lineage": lineage_vect, "clust_num": clust_num_vect, "n": n_vect, "n_dist": n_dist_vect, "bootstrap": bootstrap_vect,
+    # "node_branch_length": node_dist_vect, "mean_desc_branch_lengths": mean_descendants_vect, "branch_diffs": branch_diff_vect, "branch_ratio": branch_ratio_vect,
+    #               "branch_p_val": branch_test_p_vect, "branch_test_stat": branch_test_stat_vect,
+    #               "t_test_stat": t_test_stat_vect, "t_test_p": p_val_vect, "cohen_d_effect_size": es_vect,
+    #               "mwu_stat": mwu_stat_vect, "mwu_p": mwu_p_vect, "mwu_effect_size": mwu_es_vect,
+    #               "min_w/in": min_win_vect, "max_w/in": max_win_vect,
+    #               "sum_w/in": sum_win_vect, "mean_(sd)_w/in": mean_win_vect, "median_(mad)_w/in": med_win_vect,  "min_btwn": min_btwn_vect,
+    #               "max_btwn": max_btwn_vect, "sum_btwn": sum_btwn_vect, "mean_sd_btwn": mean_btwn_vect, "median_mad_btwn": med_btwn_vect, "med_diff": med_diff_vect,
+    #               "med_ratio": med_ratio_vect}
+
+    stats_dict = {
+    "lin":lineage_vect,
+    "clust_num":clust_num_vect,
+    "n":n_vect,
+    "n_dist":n_dist_vect,
+    "bootstrap":bootstrap_vect,
+    # -- branch stats --
+    "branch_len":node_dist_vect,
+    "mean_desc_branch_lengths":mean_descendants_vect,
+    "branch_diffs":branch_diff_vect,
+    "branch_ratio":branch_ratio_vect,
+    "branch_test_stat":branch_test_stat_vect,
+    "branch_p_val":branch_test_p_vect,
+    "log10_branch_p_val":branch_log10_p_vect,
+    "branch_cohen_d":branch_cohen_d_vect,
+    "branch_wilcox_stat":branch_wilcox_stat_vect,
+    "branch_wilcox_p":branch_wilcox_p_vect,
+    "branch_wilcox_log10_p":branch_wilcox_log10_p_vect,
+    # -- dist stats --
+    "min_win":min_win_vect,
+    "max_win":max_win_vect,
+    "sum_win":sum_win_vect,
+    "mean_win":mean_win_vect,
+    "sd_win":sd_win_vect,
+    "med_win":med_win_vect,
+    "mad_win":mad_win_vect,
+    "min_btw":min_btwn_vect,
+    "max_btwn":max_btwn_vect,
+    "sum_btwn":sum_btwn_vect,
+    "mean_btwn":mean_btwn_vect,
+    "sd_btwn":sd_btwn_vect,
+    "med_btwn":med_btwn_vect,
+    "mad_btwn":mad_btwn_vect,
+    "med_diff":med_diff_vect,
+    "med_ratio":med_ratio_vect,
+    "win_btwn_diff":diff_vect,
+    # -- dist stats tests --
+    "dist_t_test_stat":t_test_stat_vect,
+    "dist_p":p_val_vect,
+    "dist_log10_p":log10_pval_vect,
+    "dist_cohen_d":es_vect,
+    "dist_mwu_stat":mwu_stat_vect,
+    "dist_mwu_p":mwu_p_vect,
+    "dist_mwu_log10_p":mwu_log10_p_vect,
+    "dist_mwu_inv_log10_es":mwu_inv_log10_es_vect}
 
     stats_df = pd.DataFrame(stats_dict)
     pd.set_option('display.max_rows', 1000)  # print all out
@@ -536,11 +622,9 @@ def run(args):
 
     if output_stats_file is not None:
         if os.path.isfile(output_stats_file):
-            stats_df.to_csv(output_stats_file, mode='a', header=False,
-                            sep="\t", index=False)  # append
+            stats_df.to_csv(output_stats_file, mode='a', header=False, sep="\t", index=False)  # append
         else:
-            stats_df.to_csv(output_stats_file, mode='w', header=False,
-                            sep="\t", index=False)  # create
+            stats_df.to_csv(output_stats_file, mode='w', header=True, sep="\t", index=False)  # create
     print("---------------------------------------------")
 
 
